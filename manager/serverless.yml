@@ -1,0 +1,199 @@
+service: money-tracker-api
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'ap-south-1'}
+  environment:
+    MONGODB_URI: ${env:MONGODB_URI}
+    MONGODB_DB_NAME: ${env:MONGODB_DB_NAME, 'money-tracker-dev'}
+    FIREBASE_PROJECT_ID: ${env:FIREBASE_PROJECT_ID}
+  httpApi:
+    cors:
+      allowedOrigins:
+        - http://localhost:5173
+        - http://localhost:3000
+      allowedHeaders:
+        - Content-Type
+        - Authorization
+      allowedMethods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+
+build:
+  esbuild:
+    bundle: true
+    minify: false
+    sourcemap: true
+    exclude:
+      - aws-sdk
+    target: node20
+    platform: node
+
+plugins:
+  - serverless-offline
+
+functions:
+  # Income endpoints
+  getIncomes:
+    handler: src/handlers/income.getAll
+    events:
+      - httpApi:
+          path: /api/income
+          method: get
+
+  createIncome:
+    handler: src/handlers/income.create
+    events:
+      - httpApi:
+          path: /api/income
+          method: post
+
+  updateIncome:
+    handler: src/handlers/income.update
+    events:
+      - httpApi:
+          path: /api/income/{id}
+          method: put
+
+  deleteIncome:
+    handler: src/handlers/income.remove
+    events:
+      - httpApi:
+          path: /api/income/{id}
+          method: delete
+
+  # Expense endpoints
+  getExpenses:
+    handler: src/handlers/expenses.getAll
+    events:
+      - httpApi:
+          path: /api/expenses
+          method: get
+
+  createExpense:
+    handler: src/handlers/expenses.create
+    events:
+      - httpApi:
+          path: /api/expenses
+          method: post
+
+  updateExpense:
+    handler: src/handlers/expenses.update
+    events:
+      - httpApi:
+          path: /api/expenses/{id}
+          method: put
+
+  deleteExpense:
+    handler: src/handlers/expenses.remove
+    events:
+      - httpApi:
+          path: /api/expenses/{id}
+          method: delete
+
+  # Investment endpoints
+  getInvestments:
+    handler: src/handlers/investments.getAll
+    events:
+      - httpApi:
+          path: /api/investments
+          method: get
+
+  createInvestment:
+    handler: src/handlers/investments.create
+    events:
+      - httpApi:
+          path: /api/investments
+          method: post
+
+  updateInvestment:
+    handler: src/handlers/investments.update
+    events:
+      - httpApi:
+          path: /api/investments/{id}
+          method: put
+
+  toggleInvestmentStatus:
+    handler: src/handlers/investments.toggleStatus
+    events:
+      - httpApi:
+          path: /api/investments/{id}/status
+          method: patch
+
+  deleteInvestment:
+    handler: src/handlers/investments.remove
+    events:
+      - httpApi:
+          path: /api/investments/{id}
+          method: delete
+
+  # Asset endpoints
+  getAssets:
+    handler: src/handlers/assets.getAll
+    events:
+      - httpApi:
+          path: /api/assets
+          method: get
+
+  createAsset:
+    handler: src/handlers/assets.create
+    events:
+      - httpApi:
+          path: /api/assets
+          method: post
+
+  updateAsset:
+    handler: src/handlers/assets.update
+    events:
+      - httpApi:
+          path: /api/assets/{id}
+          method: put
+
+  updateAssetValue:
+    handler: src/handlers/assets.updateValue
+    events:
+      - httpApi:
+          path: /api/assets/{id}/value
+          method: patch
+
+  deleteAsset:
+    handler: src/handlers/assets.remove
+    events:
+      - httpApi:
+          path: /api/assets/{id}
+          method: delete
+
+  # Dashboard & Settings
+  getDashboard:
+    handler: src/handlers/dashboard.get
+    events:
+      - httpApi:
+          path: /api/dashboard
+          method: get
+
+  getSnapshots:
+    handler: src/handlers/dashboard.getSnapshots
+    events:
+      - httpApi:
+          path: /api/snapshots
+          method: get
+
+  getSettings:
+    handler: src/handlers/settings.get
+    events:
+      - httpApi:
+          path: /api/settings
+          method: get
+
+  updateSettings:
+    handler: src/handlers/settings.update
+    events:
+      - httpApi:
+          path: /api/settings
+          method: put

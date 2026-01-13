@@ -1,0 +1,63 @@
+# Node modules
+node_modules
+
+# Environment variables
+.env
+.env.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Serverless
+.serverless
+.serverless_plugins
+.serverless_offline
+.serverless_offline_plugins
+.serverless_offline_plugins
+
+# Dist
+dist
+dist-ssr
+*.local
+
+# Build
+build
+build-ssr
+*.local
+
+# Coverage
+coverage
+coverage-ssr
+*.local
+
+# Test
+test
+test-ssr
+*.local
+
+# Documentation
+docs
+docs-ssr
+*.local
+
+# Miscellaneous
+.cursor
+.cursorrules
+.cursorignore
