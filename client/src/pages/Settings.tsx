@@ -12,12 +12,10 @@ import {
 } from '@mui/material';
 import { Save } from '@mui/icons-material';
 import { settingsService } from '../services/settingsService';
-import type { UserSettings } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 const Settings: React.FC = () => {
   const { user } = useAuth();
-  const [settings, setSettings] = useState<UserSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +30,6 @@ const Settings: React.FC = () => {
     try {
       setLoading(true);
       const data = await settingsService.get();
-      setSettings(data);
       setUsdRate(data.exchangeRates.USD?.toString() || '89');
       setError(null);
     } catch (err) {

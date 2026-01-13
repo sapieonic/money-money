@@ -16,7 +16,6 @@ import {
   Receipt,
   TrendingUp,
   Savings,
-  AccountBalanceWallet,
   AttachMoney,
   Money,
 } from '@mui/icons-material';
@@ -223,7 +222,7 @@ const Dashboard: React.FC = () => {
                   innerRadius={50}
                   outerRadius={80}
                   paddingAngle={2}
-                  label={({ percent }) => `${(percent * 100).toFixed(0)}%`}
+                  label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
                   labelLine={false}
                 >
                   {allocationData.map((entry, index) => (
@@ -231,7 +230,7 @@ const Dashboard: React.FC = () => {
                   ))}
                 </Pie>
                 <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(value as number)}
                 />
                 <Legend
                   layout="horizontal"

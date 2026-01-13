@@ -65,7 +65,7 @@ const AssetValueHistory: React.FC<AssetValueHistoryProps> = ({
                   fontSize={12}
                 />
                 <Tooltip
-                  formatter={(value: number) => formatCurrency(value)}
+                  formatter={(value) => formatCurrency(value as number)}
                   labelStyle={{ color: '#333' }}
                 />
                 <Line
