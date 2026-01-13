@@ -1,0 +1,63 @@
+# Netlify configuration for Finance Watch
+# https://docs.netlify.com/configure-builds/file-based-configuration/
+
+[build]
+  # Base directory - where the frontend code lives
+  base = "client"
+
+  # Build command
+  command = "npm install && npm run build"
+
+  # Output directory (relative to base)
+  publish = "dist"
+
+# Environment variables (set actual values in Netlify dashboard)
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_VERSION = "10"
+
+# SPA redirect - all routes should serve index.html
+# Required for React Router to work correctly
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Security headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    X-XSS-Protection = "1; mode=block"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+# Cache static assets (JS, CSS) - immutable for 1 year
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Cache favicon - 1 day
+[[headers]]
+  for = "/favicon.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+
+# Cache images - 1 week
+[[headers]]
+  for = "*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+
+# Production context
+[context.production]
+  command = "npm install && npm run build"
+
+# Preview/branch deploys
+[context.deploy-preview]
+  command = "npm install && npm run build"
+
+[context.branch-deploy]
+  command = "npm install && npm run build"
