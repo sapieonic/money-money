@@ -42,7 +42,10 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       }
     }
 
-    return success(user.settings);
+    return success({
+      ...user.settings,
+      emailPreferences: user.emailPreferences || { weeklyExpenseSummary: true },
+    });
   } catch (err) {
     console.error('Error fetching settings:', err);
     return error('Failed to fetch settings');
@@ -83,13 +86,25 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       updateData.name = body.name;
     }
 
+    // Email preferences
+    if (body.emailPreferences !== undefined) {
+      if (typeof body.emailPreferences === 'object') {
+        if (body.emailPreferences.weeklyExpenseSummary !== undefined) {
+          updateData['emailPreferences.weeklyExpenseSummary'] = Boolean(body.emailPreferences.weeklyExpenseSummary);
+        }
+      }
+    }
+
     const user = await User.findOneAndUpdate(
       { firebaseUid: event.userId },
       { $set: updateData },
       { new: true, upsert: true }
     );
 
-    return success(user?.settings);
+    return success({
+      ...user?.settings,
+      emailPreferences: user?.emailPreferences || { weeklyExpenseSummary: true },
+    });
   } catch (err) {
     console.error('Error updating settings:', err);
     return error('Failed to update settings');

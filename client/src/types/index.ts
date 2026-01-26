@@ -113,10 +113,15 @@ export interface ExchangeRates {
   [key: string]: number | undefined;
 }
 
+export interface EmailPreferences {
+  weeklyExpenseSummary: boolean;
+}
+
 export interface UserSettings {
   currency: string;
   exchangeRates: ExchangeRates;
   theme: 'light' | 'dark';
+  emailPreferences?: EmailPreferences;
 }
 
 export interface DashboardSummary {
@@ -171,4 +176,55 @@ export interface TelegramVerifyResponse {
 export interface TelegramUnlinkResponse {
   linked: boolean;
   message: string;
+}
+
+// Weekly Analytics Types
+export interface CategoryBreakdown {
+  category: DailyExpenseCategory;
+  total: number;
+  count: number;
+  percentage: number;
+}
+
+export interface VendorBreakdown {
+  vendor: string;
+  total: number;
+  count: number;
+}
+
+export interface DailyBreakdown {
+  date: string;
+  dayName: string;
+  total: number;
+  count: number;
+}
+
+export interface WeekComparison {
+  currentWeekTotal: number;
+  previousWeekTotal: number;
+  difference: number;
+  percentageChange: number;
+  trend: 'up' | 'down' | 'same';
+}
+
+export interface WeeklyExpenseAnalytics {
+  weekStart: string;
+  weekEnd: string;
+  totalSpent: number;
+  transactionCount: number;
+  avgDailySpend: number;
+  categoryBreakdown: CategoryBreakdown[];
+  topVendors: VendorBreakdown[];
+  dailyBreakdown: DailyBreakdown[];
+  highestSpendingDay: DailyBreakdown | null;
+  lowestSpendingDay: DailyBreakdown | null;
+  topCategory: CategoryBreakdown | null;
+  weekComparison: WeekComparison;
+}
+
+export interface SendWeeklySummaryResponse {
+  message: string;
+  sentTo: string;
+  weekStart: string;
+  weekEnd: string;
 }

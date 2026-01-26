@@ -1,5 +1,5 @@
 import api from './api';
-import type { DailyExpense, DailyExpenseSummary, ApiResponse } from '../types';
+import type { DailyExpense, DailyExpenseSummary, WeeklyExpenseAnalytics, SendWeeklySummaryResponse, ApiResponse } from '../types';
 
 export interface DailyExpenseFilters {
   startDate?: string;
@@ -38,5 +38,15 @@ export const dailyExpenseService = {
 
   delete: async (id: string): Promise<void> => {
     await api.delete(`/api/daily-expenses/${id}`);
+  },
+
+  getWeeklyAnalytics: async (): Promise<WeeklyExpenseAnalytics> => {
+    const response = await api.get<ApiResponse<WeeklyExpenseAnalytics>>('/api/daily-expenses/weekly-analytics');
+    return response.data.data!;
+  },
+
+  sendWeeklySummary: async (): Promise<SendWeeklySummaryResponse> => {
+    const response = await api.post<ApiResponse<SendWeeklySummaryResponse>>('/api/daily-expenses/send-weekly-summary');
+    return response.data.data!;
   },
 };

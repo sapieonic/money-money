@@ -1,6 +1,10 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import { ExchangeRates, UserSettings } from '../types';
 
+export interface EmailPreferences {
+  weeklyExpenseSummary: boolean;
+}
+
 export interface IUser extends Document {
   firebaseUid: string;
   email: string;
@@ -9,6 +13,7 @@ export interface IUser extends Document {
   settings: UserSettings;
   telegramChatId?: number;
   telegramUsername?: string;
+  emailPreferences: EmailPreferences;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,6 +61,12 @@ const userSchema = new Schema<IUser>(
     telegramUsername: {
       type: String,
       default: null,
+    },
+    emailPreferences: {
+      weeklyExpenseSummary: {
+        type: Boolean,
+        default: true,
+      },
     },
   },
   {

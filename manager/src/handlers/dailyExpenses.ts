@@ -1,9 +1,16 @@
 import { APIGatewayProxyResultV2 } from 'aws-lambda';
 import { connectToDatabase } from '../utils/db';
 import { DailyExpense } from '../models/DailyExpense';
+import { User } from '../models/User';
 import { success, error, notFound, badRequest } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { generateWeeklyAnalytics } from '../services/analytics';
+import {
+  sendWeeklyExpenseSummary,
+  generateWeeklyExpenseEmailHTML,
+  generateWeeklyExpenseEmailText,
+} from '../services/email';
 
 // GET /api/daily-expenses - Get all with optional date range filtering
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
@@ -202,5 +209,66 @@ export const remove = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
   } catch (err) {
     console.error('Error deleting daily expense:', err);
     return error('Failed to delete daily expense');
+  }
+});
+
+// GET /api/daily-expenses/weekly-analytics - Get current week analytics
+export const getWeeklyAnalytics = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
+  try {
+    await connectToDatabase();
+
+    const analytics = await generateWeeklyAnalytics(event.userId!, new Date());
+
+    return success(analytics);
+  } catch (err) {
+    console.error('Error fetching weekly analytics:', err);
+    return error('Failed to fetch weekly analytics');
+  }
+});
+
+// POST /api/daily-expenses/send-weekly-summary - Send weekly summary email
+export const sendWeeklySummaryEmail = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
+  try {
+    await connectToDatabase();
+
+    // Get user info
+    const user = await User.findOne({ firebaseUid: event.userId });
+    if (!user) {
+      return notFound('User not found');
+    }
+
+    // Generate analytics for current week
+    const analytics = await generateWeeklyAnalytics(event.userId!, new Date());
+
+    if (analytics.transactionCount === 0) {
+      return badRequest('No expenses found for this week');
+    }
+
+    // Generate email content
+    const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name);
+    const textBody = generateWeeklyExpenseEmailText(analytics, user.name);
+    const subject = `📊 Your Weekly Expense Summary (${analytics.weekStart} - ${analytics.weekEnd})`;
+
+    // Send email
+    const emailSent = await sendWeeklyExpenseSummary(
+      user.email,
+      subject,
+      htmlBody,
+      textBody
+    );
+
+    if (!emailSent) {
+      return error('Failed to send email. Please check email configuration.');
+    }
+
+    return success({
+      message: 'Weekly summary email sent successfully',
+      sentTo: user.email,
+      weekStart: analytics.weekStart,
+      weekEnd: analytics.weekEnd,
+    });
+  } catch (err) {
+    console.error('Error sending weekly summary email:', err);
+    return error('Failed to send weekly summary email');
   }
 });
