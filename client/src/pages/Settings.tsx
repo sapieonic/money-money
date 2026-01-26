@@ -10,8 +10,10 @@ import {
   InputAdornment,
   Divider,
   Chip,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
-import { Save, Telegram, CheckCircle, Cancel, Link as LinkIcon } from '@mui/icons-material';
+import { Save, Telegram, CheckCircle, Cancel, Link as LinkIcon, Email } from '@mui/icons-material';
 import { settingsService } from '../services/settingsService';
 import { telegramService } from '../services/telegramService';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +26,7 @@ const Settings: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [usdRate, setUsdRate] = useState('89');
+  const [weeklyEmailEnabled, setWeeklyEmailEnabled] = useState(true);
 
   // Telegram state
   const [telegramStatus, setTelegramStatus] = useState<TelegramStatus | null>(null);
@@ -44,6 +47,7 @@ const Settings: React.FC = () => {
       setLoading(true);
       const data = await settingsService.get();
       setUsdRate(data.exchangeRates.USD?.toString() || '89');
+      setWeeklyEmailEnabled(data.emailPreferences?.weeklyExpenseSummary ?? true);
       setError(null);
     } catch (err) {
       setError('Failed to load settings');
@@ -72,6 +76,9 @@ const Settings: React.FC = () => {
       await settingsService.update({
         exchangeRates: {
           USD: parseFloat(usdRate),
+        },
+        emailPreferences: {
+          weeklyExpenseSummary: weeklyEmailEnabled,
         },
       });
       setSuccess(true);
@@ -294,6 +301,41 @@ const Settings: React.FC = () => {
             )}
           </>
         )}
+      </Paper>
+
+      {/* Email Notifications Section */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+          <Email color="primary" />
+          <Typography variant="h6" fontWeight={600}>
+            Email Notifications
+          </Typography>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Manage your email notification preferences
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+
+        <FormControlLabel
+          control={
+            <Switch
+              checked={weeklyEmailEnabled}
+              onChange={(e) => setWeeklyEmailEnabled(e.target.checked)}
+              color="primary"
+            />
+          }
+          label={
+            <Box>
+              <Typography variant="body1" fontWeight={500}>
+                Weekly Expense Summary
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Receive a weekly email every Monday with your spending breakdown, top categories, and trends
+              </Typography>
+            </Box>
+          }
+          sx={{ alignItems: 'flex-start', ml: 0 }}
+        />
       </Paper>
 
       {/* Exchange Rates Section */}

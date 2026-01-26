@@ -7,20 +7,23 @@ import {
   Alert,
   Paper,
   Grid,
+  Snackbar,
 } from '@mui/material';
-import { Add } from '@mui/icons-material';
+import { Add, Email } from '@mui/icons-material';
 import DailyExpenseList from '../components/daily-expenses/DailyExpenseList';
 import DailyExpenseForm from '../components/daily-expenses/DailyExpenseForm';
 import DateRangeFilter from '../components/daily-expenses/DateRangeFilter';
+import WeeklyAnalyticsCharts from '../components/daily-expenses/WeeklyAnalyticsCharts';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { dailyExpenseService } from '../services/dailyExpenseService';
 import type { DailyExpenseFilters } from '../services/dailyExpenseService';
-import type { DailyExpense, DailyExpenseSummary } from '../types';
+import type { DailyExpense, DailyExpenseSummary, WeeklyExpenseAnalytics } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
 const DailyExpenses: React.FC = () => {
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
   const [summary, setSummary] = useState<DailyExpenseSummary | null>(null);
+  const [weeklyAnalytics, setWeeklyAnalytics] = useState<WeeklyExpenseAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -38,6 +41,14 @@ const DailyExpenses: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
 
+  // Email sending state
+  const [sendingEmail, setSendingEmail] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success',
+  });
+
   const loadExpenses = useCallback(async () => {
     try {
       setLoading(true);
@@ -46,13 +57,15 @@ const DailyExpenses: React.FC = () => {
       if (endDate) filters.endDate = endDate;
       if (categoryFilter) filters.category = categoryFilter;
 
-      const [expensesData, summaryData] = await Promise.all([
+      const [expensesData, summaryData, analyticsData] = await Promise.all([
         dailyExpenseService.getAll(filters),
         dailyExpenseService.getSummary(),
+        dailyExpenseService.getWeeklyAnalytics(),
       ]);
 
       setExpenses(expensesData);
       setSummary(summaryData);
+      setWeeklyAnalytics(analyticsData);
       setError(null);
     } catch (err) {
       setError('Failed to load daily expenses');
@@ -116,6 +129,31 @@ const DailyExpenses: React.FC = () => {
     setCategoryFilter('');
   };
 
+  const handleSendWeeklySummary = async () => {
+    try {
+      setSendingEmail(true);
+      const response = await dailyExpenseService.sendWeeklySummary();
+      setSnackbar({
+        open: true,
+        message: `Weekly summary sent to ${response.sentTo}`,
+        severity: 'success',
+      });
+    } catch (err) {
+      console.error(err);
+      setSnackbar({
+        open: true,
+        message: 'Failed to send weekly summary email',
+        severity: 'error',
+      });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar((prev) => ({ ...prev, open: false }));
+  };
+
   const filteredTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   if (loading && expenses.length === 0) {
@@ -132,8 +170,10 @@ const DailyExpenses: React.FC = () => {
         sx={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           mb: 3,
+          flexWrap: 'wrap',
+          gap: 2,
         }}
       >
         <Box>
@@ -144,9 +184,19 @@ const DailyExpenses: React.FC = () => {
             Track your day-to-day spending
           </Typography>
         </Box>
-        <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
-          Add Expense
-        </Button>
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            startIcon={sendingEmail ? <CircularProgress size={16} /> : <Email />}
+            onClick={handleSendWeeklySummary}
+            disabled={sendingEmail || !weeklyAnalytics || weeklyAnalytics.transactionCount === 0}
+          >
+            {sendingEmail ? 'Sending...' : 'Email Weekly Summary'}
+          </Button>
+          <Button variant="contained" startIcon={<Add />} onClick={handleAdd}>
+            Add Expense
+          </Button>
+        </Box>
       </Box>
 
       {error && (
@@ -203,6 +253,9 @@ const DailyExpenses: React.FC = () => {
         </Grid>
       )}
 
+      {/* Weekly Analytics Charts */}
+      {weeklyAnalytics && <WeeklyAnalyticsCharts analytics={weeklyAnalytics} />}
+
       {/* Filters */}
       <DateRangeFilter
         startDate={startDate}
@@ -240,6 +293,22 @@ const DailyExpenses: React.FC = () => {
         onCancel={() => setDeleteDialogOpen(false)}
         isDestructive
       />
+
+      {/* Snackbar for email notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

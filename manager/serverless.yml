@@ -17,6 +17,12 @@ provider:
     AZURE_OPENAI_ENDPOINT: ${env:AZURE_OPENAI_ENDPOINT, ''}
     AZURE_OPENAI_DEPLOYMENT: ${env:AZURE_OPENAI_DEPLOYMENT, ''}
     AZURE_OPENAI_API_VERSION: ${env:AZURE_OPENAI_API_VERSION, '2024-02-15-preview'}
+    # Email Configuration (Mailjet)
+    EMAIL_PROVIDER: ${env:EMAIL_PROVIDER, ''}
+    MAILJET_API_KEY: ${env:MAILJET_API_KEY, ''}
+    MAILJET_SECRET_KEY: ${env:MAILJET_SECRET_KEY, ''}
+    MAILJET_FROM_EMAIL: ${env:MAILJET_FROM_EMAIL, ''}
+    MAILJET_FROM_NAME: ${env:MAILJET_FROM_NAME, 'Finance Watch'}
   httpApi:
     cors:
       allowedOrigins:
@@ -141,6 +147,20 @@ functions:
       - httpApi:
           path: /api/daily-expenses/{id}
           method: delete
+
+  getWeeklyAnalytics:
+    handler: src/handlers/dailyExpenses.getWeeklyAnalytics
+    events:
+      - httpApi:
+          path: /api/daily-expenses/weekly-analytics
+          method: get
+
+  sendWeeklySummaryEmail:
+    handler: src/handlers/dailyExpenses.sendWeeklySummaryEmail
+    events:
+      - httpApi:
+          path: /api/daily-expenses/send-weekly-summary
+          method: post
 
   # Investment endpoints
   getInvestments:
@@ -271,3 +291,13 @@ functions:
       - httpApi:
           path: /api/telegram/unlink
           method: delete
+
+  # Scheduled Jobs
+  weeklyExpenseSummary:
+    handler: src/handlers/scheduledJobs.sendWeeklyExpenseSummaries
+    timeout: 60
+    events:
+      - schedule:
+          rate: cron(30 3 ? * MON *)  # Every Monday at 9:00 AM IST (3:30 UTC)
+          enabled: true
+          description: Send weekly expense summary emails

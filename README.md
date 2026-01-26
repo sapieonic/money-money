@@ -2,8 +2,6 @@
 
 A full-stack personal finance management application to track income, expenses, investments, and assets with comprehensive tax tracking and multi-currency support.
 
-![Finance Watch](client/public/favicon.svg)
-
 ## Features
 
 ### Income Management
@@ -46,6 +44,21 @@ A full-stack personal finance management application to track income, expenses, 
 - Fallback regex parsing when LLM is not configured
 - Easy setup through Settings page
 
+### Weekly Email Summary
+- **Automated weekly reports** sent every Monday at 9 AM IST
+- **Spending breakdown** by category with percentages
+- **Top vendors** analysis
+- **Week-over-week comparison** showing spending trends
+- **Daily breakdown** showing highest/lowest spending days
+- Opt-in/opt-out toggle in Settings
+- **Manual trigger** - send summary instantly from Daily Expenses page
+
+### Weekly Analytics Dashboard
+- **Interactive pie charts** showing category and vendor distribution
+- **Real-time analytics** for the current week
+- Quick stats: daily average, top category, week comparison
+- Visual spending trends
+
 ### Dashboard
 - Visual allocation breakdown with donut chart
 - Income sources with tax breakdown per entry
@@ -69,6 +82,8 @@ A full-stack personal finance management application to track income, expenses, 
 - **MongoDB** with Mongoose v9 ODM
 - **Firebase Admin SDK** for token verification
 - **LLM Integration** - Pluggable LLM providers (Azure OpenAI, with factory pattern for extensibility)
+- **Email Service** - Pluggable email providers (Mailjet, with factory pattern for extensibility)
+- **Scheduled Jobs** - CloudWatch Events for automated tasks (weekly email summaries)
 
 ## Project Structure
 
@@ -97,10 +112,17 @@ money-money/
 │   │   ├── models/            # Mongoose schemas
 │   │   ├── services/          # Business logic
 │   │   │   ├── telegram.ts    # Telegram bot utilities
-│   │   │   └── llm/           # LLM provider implementations
-│   │   │       ├── types.ts   # LLM interfaces and types
-│   │   │       ├── factory.ts # Provider factory
-│   │   │       └── providers/ # Provider implementations
+│   │   │   ├── llm/           # LLM provider implementations
+│   │   │   │   ├── types.ts   # LLM interfaces and types
+│   │   │   │   ├── factory.ts # Provider factory
+│   │   │   │   └── providers/ # Provider implementations
+│   │   │   ├── email/         # Email provider implementations
+│   │   │   │   ├── types.ts   # Email interfaces
+│   │   │   │   ├── factory.ts # Provider factory
+│   │   │   │   ├── providers/ # Provider implementations (Mailjet, etc.)
+│   │   │   │   └── templates/ # Email templates
+│   │   │   └── analytics/     # Analytics services
+│   │   │       └── weeklyExpenseAnalytics.ts
 │   │   ├── middleware/        # Auth middleware
 │   │   ├── utils/             # Database & response utilities
 │   │   └── types/             # TypeScript interfaces
@@ -140,6 +162,15 @@ AZURE_OPENAI_API_KEY=your-azure-openai-api-key
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_OPENAI_DEPLOYMENT=your-deployment-name
 AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# Email Configuration (Optional - for weekly summaries)
+EMAIL_PROVIDER=mailjet  # or leave empty for console logging
+
+# Mailjet (Required if EMAIL_PROVIDER=mailjet)
+MAILJET_API_KEY=your-mailjet-api-key
+MAILJET_SECRET_KEY=your-mailjet-secret-key
+MAILJET_FROM_EMAIL=noreply@yourdomain.com
+MAILJET_FROM_NAME=Finance Watch
 ```
 
 #### Frontend (`client/.env`)
@@ -227,7 +258,9 @@ npm run build
 |--------|----------|-------------|
 | GET | `/api/daily-expenses` | Get all daily expenses (supports `startDate`, `endDate`, `category` query params) |
 | GET | `/api/daily-expenses/summary` | Get summary (today's total, month total, category breakdown) |
+| GET | `/api/daily-expenses/weekly-analytics` | Get current week's spending analytics with breakdowns |
 | POST | `/api/daily-expenses` | Create daily expense |
+| POST | `/api/daily-expenses/send-weekly-summary` | Send weekly summary email to user |
 | PUT | `/api/daily-expenses/{id}` | Update daily expense |
 | DELETE | `/api/daily-expenses/{id}` | Delete daily expense |
 
@@ -331,6 +364,45 @@ To add a new LLM provider:
 2. Implement the `ILLMProvider` interface
 3. Register the provider in `manager/src/services/llm/factory.ts`
 
+### Email Service (Pluggable Providers)
+
+The system uses a pluggable email provider architecture for sending weekly summaries:
+
+#### Architecture
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│ Weekly Summary  │────▶│  Email Factory   │────▶│ Email Provider  │
+│ Scheduler       │     └──────────────────┘     └─────────────────┘
+└─────────────────┘            │                        │
+                               │ Auto-detect or         │ Mailjet
+                               │ explicit config        │ (more coming)
+                               │                        │
+                               ▼                        ▼
+                        ┌──────────────────┐     ┌─────────────────┐
+                        │ Console Provider │     │ Email Sent      │
+                        │ (Development)    │     └─────────────────┘
+                        └──────────────────┘
+```
+
+#### Supported Providers
+| Provider | Status | Configuration |
+|----------|--------|---------------|
+| Mailjet | Implemented | `MAILJET_*` env vars |
+| AWS SES | Planned | - |
+| SendGrid | Planned | - |
+| Console | Default | No config (logs to console) |
+
+#### Provider Selection
+1. If `EMAIL_PROVIDER` is set explicitly, uses that provider
+2. If `MAILJET_API_KEY` and `MAILJET_SECRET_KEY` are set, uses Mailjet
+3. Falls back to console provider (logs emails, doesn't send)
+
+#### Adding New Providers
+To add a new email provider:
+1. Create a new file in `manager/src/services/email/providers/`
+2. Implement the `EmailProvider` interface
+3. Register the provider in `manager/src/services/email/factory.ts`
+
 ### Telegram Bot Integration
 
 The Telegram bot allows you to track expenses on-the-go by simply forwarding bank SMS messages.
@@ -392,6 +464,55 @@ The AI parser can intelligently extract information from various formats:
 - `Paid Rupees 100 to Apollo Pharmacy` → Health, Apollo Pharmacy
 
 The LLM understands context and can categorize expenses accurately even with varied message formats.
+
+### Weekly Email Summaries
+
+The system sends automated weekly expense summaries to help you stay on top of your spending.
+
+#### Features
+- **Automated delivery** - Emails sent every Monday at 9 AM IST
+- **Comprehensive breakdown** - Category spending with percentages
+- **Vendor analysis** - Top 5 vendors you spent with
+- **Trend tracking** - Week-over-week comparison
+- **Daily breakdown** - See which days you spent most/least
+
+#### Email Content
+The weekly summary includes:
+- Total spent this week
+- Transaction count and daily average
+- Category breakdown with visual progress bars
+- Top vendors list
+- Comparison with previous week (up/down percentage)
+- Highest and lowest spending days
+
+#### Configuration
+
+1. **Set up Mailjet**
+   - Create a [Mailjet account](https://www.mailjet.com/)
+   - Get your API key and Secret key from Account Settings
+   - Verify your sender email address
+
+2. **Configure Environment**
+   ```env
+   EMAIL_PROVIDER=mailjet
+   MAILJET_API_KEY=your-api-key
+   MAILJET_SECRET_KEY=your-secret-key
+   MAILJET_FROM_EMAIL=noreply@yourdomain.com
+   MAILJET_FROM_NAME=Finance Watch
+   ```
+
+3. **Enable for Users**
+   - Users can opt-in/out via Settings → Email Notifications
+   - Toggle "Weekly Expense Summary" on/off
+
+4. **Manual Trigger**
+   - Users can send themselves a summary instantly
+   - Click "Email Weekly Summary" button on Daily Expenses page
+
+#### Scheduled Job
+The weekly summary is triggered by AWS CloudWatch Events:
+- **Schedule**: Every Monday at 3:30 AM UTC (9:00 AM IST)
+- **Handler**: `src/handlers/scheduledJobs.sendWeeklyExpenseSummaries`
 
 ## License
 
