@@ -111,7 +111,7 @@ const WeeklyAnalyticsCharts: React.FC<WeeklyAnalyticsChartsProps> = ({ analytics
                   outerRadius={90}
                   paddingAngle={2}
                   dataKey="value"
-                  label={({ name, percentage }) => `${name} (${percentage?.toFixed(0)}%)`}
+                  label={({ name, payload }) => `${name} (${(payload?.percentage as number)?.toFixed(0) ?? 0}%)`}
                   labelLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
                 >
                   {categoryData.map((entry, index) => (
@@ -144,7 +144,10 @@ const WeeklyAnalyticsCharts: React.FC<WeeklyAnalyticsChartsProps> = ({ analytics
                   outerRadius={90}
                   paddingAngle={2}
                   dataKey="value"
-                  label={({ name }) => name.length > 12 ? `${name.slice(0, 12)}...` : name}
+                  label={({ name }) => {
+                    const label = name ?? '';
+                    return label.length > 12 ? `${label.slice(0, 12)}...` : label;
+                  }}
                   labelLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
                 >
                   {vendorData.map((entry, index) => (
