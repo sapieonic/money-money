@@ -2,6 +2,7 @@ import { APIGatewayProxyResultV2 } from 'aws-lambda';
 import { connectToDatabase } from '../utils/db';
 import { Income, IIncome } from '../models/Income';
 import { Expense } from '../models/Expense';
+import { DailyExpense } from '../models/DailyExpense';
 import { Investment } from '../models/Investment';
 import { Asset } from '../models/Asset';
 import { Snapshot } from '../models/Snapshot';
@@ -16,13 +17,26 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
 
     const userId = event.userId;
 
+    // Calculate date ranges for daily expenses
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
     // Fetch all active data in parallel
-    const [incomes, expenses, investments, assets, user] = await Promise.all([
+    const [incomes, expenses, investments, assets, user, dailyExpensesTodayResult, dailyExpensesMonthResult] = await Promise.all([
       Income.find({ userId, isActive: true }),
       Expense.find({ userId, isActive: true }),
       Investment.find({ userId, status: 'active' }),
       Asset.find({ userId, isSold: false }),
       User.findOne({ firebaseUid: userId }),
+      DailyExpense.aggregate([
+        { $match: { userId, isActive: true, date: { $gte: startOfToday } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      DailyExpense.aggregate([
+        { $match: { userId, isActive: true, date: { $gte: startOfMonth } } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
     ]);
 
     // Get exchange rate from user settings
@@ -51,6 +65,9 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
     const totalAssetValueINR = assets.reduce((sum, asset) => sum + asset.currentValueINR, 0);
     const totalAssetValueUSD = assets.reduce((sum, asset) => sum + (asset.currentValueUSD || 0), 0);
 
+    const dailyExpensesToday = dailyExpensesTodayResult[0]?.total || 0;
+    const dailyExpensesThisMonth = dailyExpensesMonthResult[0]?.total || 0;
+
     const summary: DashboardSummary = {
       totalIncome,
       totalExpenses,
@@ -59,6 +76,8 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       remaining,
       totalAssetValueINR,
       totalAssetValueUSD,
+      dailyExpensesToday,
+      dailyExpensesThisMonth,
     };
 
     // Return summary along with detailed data

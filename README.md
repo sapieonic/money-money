@@ -17,6 +17,14 @@ A full-stack personal finance management application to track income, expenses, 
 - Recurring vs one-time expense tracking
 - Monthly expense summaries
 
+### Daily Expense Tracking
+- Track day-to-day expenses (food, groceries, entertainment, shopping, travel, health, personal)
+- **Date range filtering** with quick presets (Today, This Week, This Month)
+- **Category-based filtering** for focused analysis
+- Grouped view by date with daily totals
+- Vendor tracking for better expense categorization
+- Dashboard integration showing today's and monthly totals
+
 ### Investment Portfolio
 - **SIP (Systematic Investment Plan)** tracking
 - **Voluntary investments** tracking
@@ -29,26 +37,38 @@ A full-stack personal finance management application to track income, expenses, 
 - Asset value history tracking
 - RSU-specific tracking with units and unit price
 
+### Telegram Bot Integration
+- **AI-powered expense parsing** using LLM (Azure OpenAI, with extensible architecture)
+- **Automatic expense tracking** via forwarded bank SMS messages
+- **Smart categorization** - automatically categorizes expenses based on vendor/description
+- Secure account linking with 6-digit verification codes
+- Instant confirmation messages for added expenses
+- Fallback regex parsing when LLM is not configured
+- Easy setup through Settings page
+
 ### Dashboard
 - Visual allocation breakdown with donut chart
 - Income sources with tax breakdown per entry
 - Quick stats (effective tax rate, savings rate, investment rate)
 - Asset portfolio summary in multiple currencies
+- Daily expense summary (today and this month)
 
 ## Tech Stack
 
 ### Frontend (`client/`)
-- **React 18** with TypeScript
-- **Material UI (MUI)** for UI components
+- **React 19** with TypeScript
+- **Material UI (MUI) v7** for UI components
 - **Recharts** for data visualization
-- **Vite** for build tooling
+- **Vite 7** for build tooling
+- **React Query v5** for server state management
 - **Firebase** for authentication (Google Sign-in)
 
 ### Backend (`manager/`)
 - **AWS Lambda** with Serverless Framework v4
 - **TypeScript**
-- **MongoDB** with Mongoose ODM
+- **MongoDB** with Mongoose v9 ODM
 - **Firebase Admin SDK** for token verification
+- **LLM Integration** - Pluggable LLM providers (Azure OpenAI, with factory pattern for extensibility)
 
 ## Project Structure
 
@@ -57,9 +77,10 @@ money-money/
 ├── client/                     # React Frontend
 │   ├── src/
 │   │   ├── components/        # Reusable UI components
-│   │   │   ├── common/        # Shared components
+│   │   │   ├── common/        # Shared components (Sidebar, etc.)
 │   │   │   ├── income/        # Income-related components
 │   │   │   ├── expenses/      # Expense-related components
+│   │   │   ├── daily-expenses/# Daily expense components
 │   │   │   ├── investments/   # Investment-related components
 │   │   │   └── assets/        # Asset-related components
 │   │   ├── pages/             # Page components
@@ -74,6 +95,12 @@ money-money/
 │   ├── src/
 │   │   ├── handlers/          # Lambda function handlers
 │   │   ├── models/            # Mongoose schemas
+│   │   ├── services/          # Business logic
+│   │   │   ├── telegram.ts    # Telegram bot utilities
+│   │   │   └── llm/           # LLM provider implementations
+│   │   │       ├── types.ts   # LLM interfaces and types
+│   │   │       ├── factory.ts # Provider factory
+│   │   │       └── providers/ # Provider implementations
 │   │   ├── middleware/        # Auth middleware
 │   │   ├── utils/             # Database & response utilities
 │   │   └── types/             # TypeScript interfaces
@@ -90,14 +117,29 @@ money-money/
 - MongoDB Atlas account
 - Firebase project with Google Sign-in enabled
 - AWS account (for deployment)
+- Telegram Bot Token (optional, for Telegram integration)
+- Azure OpenAI account (optional, for AI-powered expense parsing)
 
 ### Environment Setup
 
 #### Backend (`manager/.env`)
 ```env
+# Required
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster>.mongodb.net
 MONGODB_DB_NAME=finance-watch
 FIREBASE_PROJECT_ID=your-firebase-project-id
+
+# Telegram Integration (Optional)
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+
+# LLM Configuration (Optional - for AI-powered parsing)
+LLM_PROVIDER=azure-openai  # or leave empty for regex fallback
+
+# Azure OpenAI (Required if LLM_PROVIDER=azure-openai)
+AZURE_OPENAI_API_KEY=your-azure-openai-api-key
+AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+AZURE_OPENAI_API_VERSION=2024-02-15-preview
 ```
 
 #### Frontend (`client/.env`)
@@ -164,29 +206,63 @@ npm run build
 
 ## API Endpoints
 
+### Income
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/income` | Get all income sources |
 | POST | `/api/income` | Create income source |
 | PUT | `/api/income/{id}` | Update income source |
 | DELETE | `/api/income/{id}` | Delete income source |
+
+### Expenses (Recurring)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/expenses` | Get all expenses |
 | POST | `/api/expenses` | Create expense |
 | PUT | `/api/expenses/{id}` | Update expense |
 | DELETE | `/api/expenses/{id}` | Delete expense |
+
+### Daily Expenses
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/daily-expenses` | Get all daily expenses (supports `startDate`, `endDate`, `category` query params) |
+| GET | `/api/daily-expenses/summary` | Get summary (today's total, month total, category breakdown) |
+| POST | `/api/daily-expenses` | Create daily expense |
+| PUT | `/api/daily-expenses/{id}` | Update daily expense |
+| DELETE | `/api/daily-expenses/{id}` | Delete daily expense |
+
+### Investments
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/investments` | Get all investments |
 | POST | `/api/investments` | Create investment |
 | PUT | `/api/investments/{id}` | Update investment |
 | PATCH | `/api/investments/{id}/status` | Toggle investment status |
 | DELETE | `/api/investments/{id}` | Delete investment |
+
+### Assets
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/assets` | Get all assets |
 | POST | `/api/assets` | Create asset |
 | PUT | `/api/assets/{id}` | Update asset |
 | PATCH | `/api/assets/{id}/value` | Update asset value |
 | DELETE | `/api/assets/{id}` | Delete asset |
+
+### Dashboard & Settings
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | GET | `/api/dashboard` | Get dashboard summary |
 | GET | `/api/settings` | Get user settings |
 | PUT | `/api/settings` | Update user settings |
+
+### Telegram Integration
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/telegram/webhook` | Webhook for Telegram bot messages |
+| GET | `/api/telegram/status` | Check if user has linked Telegram |
+| POST | `/api/telegram/verify-code` | Verify link code and connect account |
+| DELETE | `/api/telegram/unlink` | Disconnect Telegram account |
 
 ## Key Features Explained
 
@@ -203,6 +279,119 @@ RSU income is stored in its original currency (typically USD) and converted to I
 - Assets and RSU income can be tracked in USD or INR
 - Exchange rates are configurable per user in Settings
 - Dashboard shows portfolio value in both currencies
+
+### Daily Expense Categories
+Daily expenses are categorized for better tracking and analysis:
+- **Food** - Restaurants, cafes, food delivery
+- **Groceries** - Supermarket, vegetables, daily essentials
+- **Entertainment** - Movies, events, subscriptions
+- **Shopping** - Clothing, electronics, household items
+- **Travel** - Cab, fuel, public transport
+- **Health** - Medicine, doctor visits, gym
+- **Personal** - Personal care, miscellaneous
+- **Other** - Uncategorized expenses
+
+### LLM-Powered Expense Parsing
+
+The system uses a pluggable LLM architecture for intelligent expense parsing:
+
+#### Architecture
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│ Telegram Message│────▶│   LLM Factory    │────▶│  LLM Provider   │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+                               │                        │
+                               │ Auto-detect or         │ Azure OpenAI
+                               │ explicit config        │ (more coming)
+                               │                        │
+                               ▼                        ▼
+                        ┌──────────────────┐     ┌─────────────────┐
+                        │ Fallback Provider│     │ Parsed Expense  │
+                        │ (Regex-based)    │     │ with Category   │
+                        └──────────────────┘     └─────────────────┘
+```
+
+#### Supported Providers
+| Provider | Status | Configuration |
+|----------|--------|---------------|
+| Azure OpenAI | Implemented | `AZURE_OPENAI_*` env vars |
+| OpenAI | Planned | - |
+| Anthropic | Planned | - |
+| Fallback (Regex) | Default | No config needed |
+
+#### Provider Selection
+The system auto-detects the provider based on available credentials:
+1. If `LLM_PROVIDER` is set explicitly, uses that provider
+2. If `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` are set, uses Azure OpenAI
+3. Falls back to regex-based parsing if no LLM is configured
+
+#### Adding New Providers
+To add a new LLM provider:
+1. Create a new file in `manager/src/services/llm/providers/`
+2. Implement the `ILLMProvider` interface
+3. Register the provider in `manager/src/services/llm/factory.ts`
+
+### Telegram Bot Integration
+
+The Telegram bot allows you to track expenses on-the-go by simply forwarding bank SMS messages.
+
+#### Setup Instructions
+
+1. **Create a Telegram Bot**
+   - Open Telegram and search for `@BotFather`
+   - Send `/newbot` and follow the prompts
+   - Copy the bot token provided
+
+2. **Configure the Backend**
+   - Add `TELEGRAM_BOT_TOKEN=<your-token>` to `manager/.env`
+   - (Optional) Configure Azure OpenAI for AI-powered parsing
+   - Deploy the backend
+
+3. **Register the Webhook**
+   ```bash
+   curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=<API_URL>/api/telegram/webhook"
+   ```
+
+4. **Link Your Account**
+   - Open your bot in Telegram
+   - Send `/link` to get a 6-digit code
+   - Go to Settings in Finance Watch
+   - Enter the code in the Telegram Integration section
+
+5. **Start Tracking**
+   - Forward any bank SMS to the bot
+   - The bot uses AI (or regex fallback) to parse the expense
+   - Automatically categorizes based on vendor/description
+   - View your expenses in the Daily Expenses page
+
+#### Azure OpenAI Setup
+
+1. **Create Azure OpenAI Resource**
+   - Go to [Azure Portal](https://portal.azure.com)
+   - Create an Azure OpenAI resource
+   - Deploy a model (e.g., `gpt-4o-mini` or `gpt-35-turbo`)
+
+2. **Get Credentials**
+   - Navigate to your Azure OpenAI resource
+   - Go to "Keys and Endpoint"
+   - Copy the API key and endpoint
+
+3. **Configure Environment**
+   ```env
+   AZURE_OPENAI_API_KEY=your-api-key
+   AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
+   AZURE_OPENAI_DEPLOYMENT=your-deployment-name
+   AZURE_OPENAI_API_VERSION=2024-02-15-preview
+   ```
+
+#### Supported SMS Formats
+The AI parser can intelligently extract information from various formats:
+- `Rs.500 debited at Amazon` → Shopping, Amazon
+- `INR 1,200.00 paid to Swiggy` → Food, Swiggy
+- `Your a/c debited by Rs.250 at UBER` → Travel, Uber
+- `Paid Rupees 100 to Apollo Pharmacy` → Health, Apollo Pharmacy
+
+The LLM understands context and can categorize expenses accurately even with varied message formats.
 
 ## License
 

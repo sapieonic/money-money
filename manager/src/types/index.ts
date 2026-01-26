@@ -22,6 +22,8 @@ export type VestPeriod = 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
 
 export type ExpenseCategory = 'housing' | 'transport' | 'utilities' | 'subscriptions' | 'loan' | 'other';
 
+export type DailyExpenseCategory = 'food' | 'groceries' | 'entertainment' | 'shopping' | 'travel' | 'health' | 'personal' | 'other';
+
 export type InvestmentType = 'sip' | 'voluntary';
 
 export type InvestmentCategory = 'mutual_fund' | 'stocks' | 'crypto' | 'other';
@@ -56,4 +58,6 @@ export interface DashboardSummary {
   remaining: number;
   totalAssetValueINR: number;
   totalAssetValueUSD: number;
+  dailyExpensesToday: number;
+  dailyExpensesThisMonth: number;
 }

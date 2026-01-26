@@ -9,11 +9,20 @@ provider:
     MONGODB_URI: ${env:MONGODB_URI}
     MONGODB_DB_NAME: ${env:MONGODB_DB_NAME, 'money-tracker-dev'}
     FIREBASE_PROJECT_ID: ${env:FIREBASE_PROJECT_ID}
+    TELEGRAM_BOT_TOKEN: ${env:TELEGRAM_BOT_TOKEN, ''}
+    # LLM Provider Configuration (optional)
+    LLM_PROVIDER: ${env:LLM_PROVIDER, ''}
+    # Azure OpenAI Configuration
+    AZURE_OPENAI_API_KEY: ${env:AZURE_OPENAI_API_KEY, ''}
+    AZURE_OPENAI_ENDPOINT: ${env:AZURE_OPENAI_ENDPOINT, ''}
+    AZURE_OPENAI_DEPLOYMENT: ${env:AZURE_OPENAI_DEPLOYMENT, ''}
+    AZURE_OPENAI_API_VERSION: ${env:AZURE_OPENAI_API_VERSION, '2024-02-15-preview'}
   httpApi:
     cors:
       allowedOrigins:
         - http://localhost:5173
         - http://localhost:3000
+        - https://money.manasranjan.dev
       allowedHeaders:
         - Content-Type
         - Authorization
@@ -95,6 +104,42 @@ functions:
     events:
       - httpApi:
           path: /api/expenses/{id}
+          method: delete
+
+  # Daily Expense endpoints
+  getDailyExpenses:
+    handler: src/handlers/dailyExpenses.getAll
+    events:
+      - httpApi:
+          path: /api/daily-expenses
+          method: get
+
+  getDailyExpensesSummary:
+    handler: src/handlers/dailyExpenses.getSummary
+    events:
+      - httpApi:
+          path: /api/daily-expenses/summary
+          method: get
+
+  createDailyExpense:
+    handler: src/handlers/dailyExpenses.create
+    events:
+      - httpApi:
+          path: /api/daily-expenses
+          method: post
+
+  updateDailyExpense:
+    handler: src/handlers/dailyExpenses.update
+    events:
+      - httpApi:
+          path: /api/daily-expenses/{id}
+          method: put
+
+  deleteDailyExpense:
+    handler: src/handlers/dailyExpenses.remove
+    events:
+      - httpApi:
+          path: /api/daily-expenses/{id}
           method: delete
 
   # Investment endpoints
@@ -197,3 +242,32 @@ functions:
       - httpApi:
           path: /api/settings
           method: put
+
+  # Telegram Integration endpoints
+  telegramWebhook:
+    handler: src/handlers/telegram.webhook
+    events:
+      - httpApi:
+          path: /api/telegram/webhook
+          method: post
+
+  telegramStatus:
+    handler: src/handlers/telegram.status
+    events:
+      - httpApi:
+          path: /api/telegram/status
+          method: get
+
+  telegramVerifyCode:
+    handler: src/handlers/telegram.verifyCode
+    events:
+      - httpApi:
+          path: /api/telegram/verify-code
+          method: post
+
+  telegramUnlink:
+    handler: src/handlers/telegram.unlink
+    events:
+      - httpApi:
+          path: /api/telegram/unlink
+          method: delete

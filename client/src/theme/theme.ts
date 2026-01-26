@@ -122,3 +122,14 @@ export const assetCategoryColors: Record<string, string> = {
   rsu: '#00bcd4',
   other: '#607d8b',
 };
+
+export const dailyExpenseCategoryColors: Record<string, string> = {
+  food: '#ff7043',
+  groceries: '#66bb6a',
+  entertainment: '#ab47bc',
+  shopping: '#42a5f5',
+  travel: '#26a69a',
+  health: '#ef5350',
+  personal: '#ffca28',
+  other: '#78909c',
+};

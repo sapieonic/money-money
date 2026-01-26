@@ -10,6 +10,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Income from './pages/Income';
 import Expenses from './pages/Expenses';
+import DailyExpenses from './pages/DailyExpenses';
 import Investments from './pages/Investments';
 import Assets from './pages/Assets';
 import Settings from './pages/Settings';
@@ -76,6 +77,7 @@ const AppLayout: React.FC = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/income" element={<Income />} />
           <Route path="/expenses" element={<Expenses />} />
+          <Route path="/daily-expenses" element={<DailyExpenses />} />
           <Route path="/investments" element={<Investments />} />
           <Route path="/assets" element={<Assets />} />
           <Route path="/settings" element={<Settings />} />

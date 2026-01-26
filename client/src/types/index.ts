@@ -4,6 +4,8 @@ export type VestPeriod = 'monthly' | 'quarterly' | 'semi_annual' | 'annual';
 
 export type ExpenseCategory = 'housing' | 'transport' | 'utilities' | 'subscriptions' | 'loan' | 'other';
 
+export type DailyExpenseCategory = 'food' | 'groceries' | 'entertainment' | 'shopping' | 'travel' | 'health' | 'personal' | 'other';
+
 export type InvestmentType = 'sip' | 'voluntary';
 
 export type InvestmentCategory = 'mutual_fund' | 'stocks' | 'crypto' | 'other';
@@ -42,6 +44,30 @@ export interface Expense {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface DailyExpense {
+  _id: string;
+  userId: string;
+  amount: number;
+  description: string;
+  vendor: string;
+  category: DailyExpenseCategory;
+  date: string;
+  currency: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DailyExpenseSummary {
+  today: number;
+  thisMonth: number;
+  categoryBreakdown: {
+    category: DailyExpenseCategory;
+    total: number;
+    count: number;
+  }[];
 }
 
 export interface Investment {
@@ -101,6 +127,8 @@ export interface DashboardSummary {
   remaining: number;
   totalAssetValueINR: number;
   totalAssetValueUSD: number;
+  dailyExpensesToday: number;
+  dailyExpensesThisMonth: number;
 }
 
 export interface DashboardData {
@@ -128,4 +156,19 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+
+export interface TelegramStatus {
+  linked: boolean;
+  username: string | null;
+}
+
+export interface TelegramVerifyResponse {
+  linked: boolean;
+  username: string | null;
+}
+
+export interface TelegramUnlinkResponse {
+  linked: boolean;
+  message: string;
 }

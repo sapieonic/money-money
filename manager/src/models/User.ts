@@ -7,6 +7,8 @@ export interface IUser extends Document {
   name: string;
   picture?: string;
   settings: UserSettings;
+  telegramChatId?: number;
+  telegramUsername?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,6 +46,16 @@ const userSchema = new Schema<IUser>(
         enum: ['light', 'dark'],
         default: 'light',
       },
+    },
+    telegramChatId: {
+      type: Number,
+      default: null,
+      index: true,
+      sparse: true,
+    },
+    telegramUsername: {
+      type: String,
+      default: null,
     },
   },
   {

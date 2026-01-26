@@ -16,6 +16,7 @@ import {
   Dashboard,
   AccountBalance,
   Receipt,
+  ShoppingCart,
   TrendingUp,
   AccountBalanceWallet,
   Settings,
@@ -33,6 +34,7 @@ const menuItems = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/' },
   { text: 'Income', icon: <AccountBalance />, path: '/income' },
   { text: 'Expenses', icon: <Receipt />, path: '/expenses' },
+  { text: 'Daily Expenses', icon: <ShoppingCart />, path: '/daily-expenses' },
   { text: 'Investments', icon: <TrendingUp />, path: '/investments' },
   { text: 'Assets', icon: <AccountBalanceWallet />, path: '/assets' },
 ];

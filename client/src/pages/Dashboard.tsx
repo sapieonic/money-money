@@ -18,6 +18,7 @@ import {
   Savings,
   AttachMoney,
   Money,
+  ShoppingCart,
 } from '@mui/icons-material';
 import {
   PieChart,
@@ -198,6 +199,24 @@ const Dashboard: React.FC = () => {
             compact
           />
         </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <SummaryCard
+            title="Daily (Today)"
+            amount={summary.dailyExpensesToday || 0}
+            color="#ff7043"
+            icon={<ShoppingCart />}
+            compact
+          />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+          <SummaryCard
+            title="Daily (Month)"
+            amount={summary.dailyExpensesThisMonth || 0}
+            color="#ef5350"
+            icon={<ShoppingCart />}
+            compact
+          />
+        </Grid>
       </Grid>
 
       {/* Charts Section */}
@@ -280,6 +299,7 @@ const Dashboard: React.FC = () => {
                         />
                       </Box>
                     }
+                    secondaryTypographyProps={{ component: 'div' }}
                     secondary={
                       <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                         {income.type === 'rsu_vesting' ? (
