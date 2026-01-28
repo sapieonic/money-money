@@ -16,10 +16,20 @@ import {
   getHelpMessage,
   TelegramUpdate,
 } from '../services/telegram';
+import { startRequestSpan, checkColdStart, recordError, flush } from '../utils/telemetry';
 
 // POST /api/telegram/webhook - Receives messages from Telegram (no auth)
 export const webhook = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
-  try {
+  const result = await startRequestSpan(
+    'POST /api/telegram/webhook',
+    {
+      'http.method': 'POST',
+      'http.route': '/api/telegram/webhook',
+      'telegram.webhook': true,
+    },
+    async () => {
+      checkColdStart();
+      try {
     await connectToDatabase();
 
     const update: TelegramUpdate = JSON.parse(event.body || '{}');
@@ -147,11 +157,19 @@ View in Finance Watch → Daily Expenses`
     );
 
     return success({ ok: true });
-  } catch (err) {
-    console.error('Error processing Telegram webhook:', err);
-    // Always return 200 to Telegram to acknowledge receipt
-    return success({ ok: true });
-  }
+      } catch (err) {
+        console.error('Error processing Telegram webhook:', err);
+        if (err instanceof Error) {
+          recordError(err, { 'telegram.error': 'webhook_processing' });
+        }
+        // Always return 200 to Telegram to acknowledge receipt
+        return success({ ok: true });
+      }
+    }
+  );
+
+  await flush();
+  return result;
 };
 
 // GET /api/telegram/status - Check if user has linked Telegram

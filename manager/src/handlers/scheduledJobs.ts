@@ -12,6 +12,7 @@ import {
   generateWeeklyExpenseEmailHTML,
   generateWeeklyExpenseEmailText,
 } from '../services/email';
+import { startRequestSpan, checkColdStart, recordError, flush } from '../utils/telemetry';
 
 /**
  * Send weekly expense summary emails to all opted-in users
@@ -21,9 +22,17 @@ export const sendWeeklyExpenseSummaries = async (
   event: ScheduledEvent,
   context: Context
 ): Promise<{ success: boolean; processed: number; sent: number; errors: number }> => {
-  console.log('Starting weekly expense summary job...');
+  const result = await startRequestSpan(
+    'scheduled.weeklyExpenseSummary',
+    {
+      'faas.trigger': 'timer',
+      'scheduled.job': 'weekly_expense_summary',
+    },
+    async () => {
+      checkColdStart();
+      console.log('Starting weekly expense summary job...');
 
-  try {
+      try {
     await connectToDatabase();
 
     // Find all users who have opted in for weekly summaries
@@ -81,20 +90,28 @@ export const sendWeeklyExpenseSummaries = async (
     console.log(`Weekly summary job complete. Sent: ${sent}, Errors: ${errors}`);
 
     return {
-      success: true,
-      processed: users.length,
-      sent,
-      errors,
-    };
-  } catch (err) {
-    console.error('Weekly summary job failed:', err);
-    return {
-      success: false,
-      processed: 0,
-      sent: 0,
-      errors: 1,
-    };
-  }
+          success: true,
+          processed: users.length,
+          sent,
+          errors,
+        };
+      } catch (err) {
+        console.error('Weekly summary job failed:', err);
+        if (err instanceof Error) {
+          recordError(err, { 'scheduled.error': 'weekly_summary_failed' });
+        }
+        return {
+          success: false,
+          processed: 0,
+          sent: 0,
+          errors: 1,
+        };
+      }
+    }
+  );
+
+  await flush();
+  return result;
 };
 
 /**
