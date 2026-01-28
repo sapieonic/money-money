@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { logger } from './telemetry';
 
 let cachedConnection: typeof mongoose | null = null;
 
@@ -20,10 +21,10 @@ export const connectToDatabase = async (): Promise<typeof mongoose> => {
       dbName,
     });
 
-    console.log(`Connected to MongoDB database: ${dbName}`);
+    logger.info('Connected to MongoDB database', { dbName });
     return cachedConnection;
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    logger.error('MongoDB connection error', { error: String(error) });
     throw error;
   }
 };

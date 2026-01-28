@@ -3,6 +3,7 @@
  */
 
 import { getLLMProvider, LLMParseResult } from './llm';
+import { logger } from '../utils/telemetry';
 
 const TELEGRAM_API_BASE = 'https://api.telegram.org/bot';
 
@@ -51,7 +52,7 @@ export async function sendTelegramMessage(chatId: number, text: string): Promise
   const token = process.env.TELEGRAM_BOT_TOKEN;
 
   if (!token) {
-    console.error('TELEGRAM_BOT_TOKEN not configured');
+    logger.error('TELEGRAM_BOT_TOKEN not configured');
     return false;
   }
 
@@ -70,13 +71,13 @@ export async function sendTelegramMessage(chatId: number, text: string): Promise
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('Failed to send Telegram message:', error);
+      logger.error('Failed to send Telegram message', { error });
       return false;
     }
 
     return true;
   } catch (err) {
-    console.error('Error sending Telegram message:', err);
+    logger.error('Error sending Telegram message', { error: String(err) });
     return false;
   }
 }
@@ -95,7 +96,7 @@ export function generateLinkCode(): string {
 export async function parseExpenseMessage(text: string): Promise<ParseExpenseResult> {
   const provider = getLLMProvider();
 
-  console.log(`Parsing expense message with provider: ${provider.name}`);
+  logger.info('Parsing expense message', { provider: provider.name });
 
   const result: LLMParseResult = await provider.parseExpenseMessage(text);
 

@@ -4,6 +4,7 @@ import { Expense } from '../models/Expense';
 import { success, error, notFound, badRequest } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { logger } from '../utils/telemetry';
 
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -13,7 +14,7 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(expenses);
   } catch (err) {
-    console.error('Error fetching expenses:', err);
+    logger.error('Error fetching expenses', { error: String(err) });
     return error('Failed to fetch expenses');
   }
 });
@@ -40,7 +41,7 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(expense, 201);
   } catch (err) {
-    console.error('Error creating expense:', err);
+    logger.error('Error creating expense', { error: String(err) });
     return error('Failed to create expense');
   }
 });
@@ -74,7 +75,7 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(expense);
   } catch (err) {
-    console.error('Error updating expense:', err);
+    logger.error('Error updating expense', { error: String(err) });
     return error('Failed to update expense');
   }
 });
@@ -101,7 +102,7 @@ export const remove = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success({ message: 'Expense deleted successfully' });
   } catch (err) {
-    console.error('Error deleting expense:', err);
+    logger.error('Error deleting expense', { error: String(err) });
     return error('Failed to delete expense');
   }
 });

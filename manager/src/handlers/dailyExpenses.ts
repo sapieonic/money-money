@@ -11,6 +11,7 @@ import {
   generateWeeklyExpenseEmailHTML,
   generateWeeklyExpenseEmailText,
 } from '../services/email';
+import { logger } from '../utils/telemetry';
 
 // GET /api/daily-expenses - Get all with optional date range filtering
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
@@ -48,7 +49,7 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(expenses);
   } catch (err) {
-    console.error('Error fetching daily expenses:', err);
+    logger.error('Error fetching daily expenses', { error: String(err) });
     return error('Failed to fetch daily expenses');
   }
 });
@@ -114,7 +115,7 @@ export const getSummary = withAuth(async (event: AuthenticatedEvent): Promise<AP
       })),
     });
   } catch (err) {
-    console.error('Error fetching daily expense summary:', err);
+    logger.error('Error fetching daily expense summary', { error: String(err) });
     return error('Failed to fetch daily expense summary');
   }
 });
@@ -143,7 +144,7 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(expense, 201);
   } catch (err) {
-    console.error('Error creating daily expense:', err);
+    logger.error('Error creating daily expense', { error: String(err) });
     return error('Failed to create daily expense');
   }
 });
@@ -179,7 +180,7 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(expense);
   } catch (err) {
-    console.error('Error updating daily expense:', err);
+    logger.error('Error updating daily expense', { error: String(err) });
     return error('Failed to update daily expense');
   }
 });
@@ -207,7 +208,7 @@ export const remove = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success({ message: 'Daily expense deleted successfully' });
   } catch (err) {
-    console.error('Error deleting daily expense:', err);
+    logger.error('Error deleting daily expense', { error: String(err) });
     return error('Failed to delete daily expense');
   }
 });
@@ -221,7 +222,7 @@ export const getWeeklyAnalytics = withAuth(async (event: AuthenticatedEvent): Pr
 
     return success(analytics);
   } catch (err) {
-    console.error('Error fetching weekly analytics:', err);
+    logger.error('Error fetching weekly analytics', { error: String(err) });
     return error('Failed to fetch weekly analytics');
   }
 });
@@ -268,7 +269,7 @@ export const sendWeeklySummaryEmail = withAuth(async (event: AuthenticatedEvent)
       weekEnd: analytics.weekEnd,
     });
   } catch (err) {
-    console.error('Error sending weekly summary email:', err);
+    logger.error('Error sending weekly summary email', { error: String(err) });
     return error('Failed to send weekly summary email');
   }
 });

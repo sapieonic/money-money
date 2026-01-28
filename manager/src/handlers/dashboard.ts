@@ -10,6 +10,7 @@ import { User } from '../models/User';
 import { success, error } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent, DashboardSummary } from '../types';
+import { logger } from '../utils/telemetry';
 
 export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -89,7 +90,7 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       assets,
     });
   } catch (err) {
-    console.error('Error fetching dashboard:', err);
+    logger.error('Error fetching dashboard', { error: String(err) });
     return error('Failed to fetch dashboard data');
   }
 });
@@ -106,7 +107,7 @@ export const getSnapshots = withAuth(async (event: AuthenticatedEvent): Promise<
 
     return success(snapshots);
   } catch (err) {
-    console.error('Error fetching snapshots:', err);
+    logger.error('Error fetching snapshots', { error: String(err) });
     return error('Failed to fetch snapshots');
   }
 });
@@ -166,7 +167,7 @@ export const createSnapshot = withAuth(async (event: AuthenticatedEvent): Promis
 
     return success(snapshot, 201);
   } catch (err) {
-    console.error('Error creating snapshot:', err);
+    logger.error('Error creating snapshot', { error: String(err) });
     return error('Failed to create snapshot');
   }
 });

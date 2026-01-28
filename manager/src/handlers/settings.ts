@@ -4,6 +4,7 @@ import { User } from '../models/User';
 import { success, error, badRequest } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { logger } from '../utils/telemetry';
 
 export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -47,7 +48,7 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       emailPreferences: user.emailPreferences || { weeklyExpenseSummary: true },
     });
   } catch (err) {
-    console.error('Error fetching settings:', err);
+    logger.error('Error fetching settings', { error: String(err) });
     return error('Failed to fetch settings');
   }
 });
@@ -106,7 +107,7 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       emailPreferences: user?.emailPreferences || { weeklyExpenseSummary: true },
     });
   } catch (err) {
-    console.error('Error updating settings:', err);
+    logger.error('Error updating settings', { error: String(err) });
     return error('Failed to update settings');
   }
 });

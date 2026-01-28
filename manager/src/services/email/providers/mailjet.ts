@@ -10,6 +10,7 @@
  */
 
 import { EmailProvider, EmailOptions, EmailResult } from '../types';
+import { logger } from '../../../utils/telemetry';
 
 interface MailjetMessage {
   From: {
@@ -103,7 +104,7 @@ export class MailjetProvider implements EmailProvider {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Mailjet API error:', response.status, errorText);
+        logger.error('Mailjet API error', { status: response.status, error: errorText });
         return {
           success: false,
           error: `Mailjet API error: ${response.status} - ${errorText}`,
@@ -114,7 +115,7 @@ export class MailjetProvider implements EmailProvider {
 
       if (result.Messages && result.Messages[0]?.Status === 'success') {
         const messageId = result.Messages[0].To[0]?.MessageUUID;
-        console.log('Email sent successfully via Mailjet:', messageId);
+        logger.info('Email sent successfully via Mailjet', { messageId });
         return {
           success: true,
           messageId,
@@ -127,7 +128,7 @@ export class MailjetProvider implements EmailProvider {
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      console.error('Failed to send email via Mailjet:', errorMessage);
+      logger.error('Failed to send email via Mailjet', { error: errorMessage });
       return {
         success: false,
         error: errorMessage,

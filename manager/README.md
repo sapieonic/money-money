@@ -11,6 +11,7 @@ Serverless backend API for the Money Tracker application, built with AWS Lambda 
 - **Serverless Framework** for deployment
 - **TypeScript** for type safety
 - **Mongoose** for MongoDB ODM
+- **Grafana Cloud** for observability (traces & logs via OTLP)
 
 ## Prerequisites
 
@@ -88,20 +89,30 @@ src/
 │   ├── expenses.ts      # Expense CRUD operations
 │   ├── investments.ts   # Investment CRUD + status toggle
 │   ├── assets.ts        # Asset CRUD + value updates
+│   ├── dailyExpenses.ts # Daily expense tracking
 │   ├── dashboard.ts     # Dashboard aggregation + snapshots
-│   └── settings.ts      # User settings management
+│   ├── settings.ts      # User settings management
+│   ├── telegram.ts      # Telegram bot webhook
+│   └── scheduledJobs.ts # Cron jobs (weekly summaries)
 ├── models/              # Mongoose schemas
 │   ├── User.ts          # User model with settings
 │   ├── Income.ts        # Income source model
 │   ├── Expense.ts       # Expense model
+│   ├── DailyExpense.ts  # Daily expense model
 │   ├── Investment.ts    # Investment model (SIP/voluntary)
 │   ├── Asset.ts         # Asset model with value history
 │   └── Snapshot.ts      # Monthly snapshot model
 ├── middleware/          # Express-style middleware
-│   └── auth.ts          # Firebase token verification
+│   └── auth.ts          # Firebase token verification + telemetry
+├── services/            # External service integrations
+│   ├── telegram.ts      # Telegram Bot API utilities
+│   ├── analytics.ts     # Weekly analytics generation
+│   ├── email/           # Email providers (Mailjet)
+│   └── llm/             # LLM providers (Azure OpenAI)
 ├── utils/               # Utility modules
 │   ├── db.ts            # MongoDB connection with caching
-│   └── response.ts      # API response helpers
+│   ├── response.ts      # API response helpers
+│   └── telemetry.ts     # Custom OTLP telemetry & logger
 └── types/               # TypeScript definitions
     └── index.ts
 ```
@@ -318,11 +329,57 @@ All API responses follow this format:
 |----------|-------------|
 | `MONGODB_URI` | MongoDB Atlas connection string |
 | `FIREBASE_PROJECT_ID` | Firebase project ID for auth verification |
+| `GRAFANA_OTLP_ENDPOINT` | Grafana Cloud OTLP endpoint (optional) |
+| `GRAFANA_OTLP_HEADERS` | OTLP auth headers, format: `Authorization=Basic <base64>` (optional) |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token for expense tracking (optional) |
+| `LLM_PROVIDER` | LLM provider for parsing expenses: `azure-openai` or `none` (optional) |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI API key (optional) |
+| `AZURE_OPENAI_ENDPOINT` | Azure OpenAI endpoint (optional) |
+| `AZURE_OPENAI_DEPLOYMENT` | Azure OpenAI deployment name (optional) |
+| `EMAIL_PROVIDER` | Email provider: `mailjet` or `console` (optional) |
+| `MAILJET_API_KEY` | Mailjet API key (optional) |
+| `MAILJET_SECRET_KEY` | Mailjet secret key (optional) |
+| `MAILJET_FROM_EMAIL` | Sender email for Mailjet (optional) |
 
 ## CORS Configuration
 
 CORS is configured to allow requests from:
 - `http://localhost:5173` (Vite dev server)
 - `http://localhost:3000`
+- `https://money.manasranjan.dev` (production)
 
-Update `serverless.yml` to add production domains.
+The CORS config includes `traceparent` and `tracestate` headers for distributed tracing.
+
+## Observability
+
+The API includes built-in observability via a lightweight custom OTLP implementation that sends traces and logs to Grafana Cloud.
+
+### Features
+
+- **Distributed Tracing**: All requests are wrapped in spans with user context
+- **Structured Logging**: Logger sends logs to both CloudWatch and Grafana
+- **Cold Start Detection**: Tracks Lambda cold starts
+- **Error Tracking**: Errors are recorded with stack traces
+
+### Usage
+
+```typescript
+import { logger } from '../utils/telemetry';
+
+// Logging
+logger.info('User logged in', { userId: 'abc123' });
+logger.error('Payment failed', { orderId: '456', reason: 'insufficient_funds' });
+logger.warn('Rate limit approaching', { current: 95, limit: 100 });
+logger.debug('Processing request', { path: '/api/expenses' });
+```
+
+### Configuration
+
+Set these environment variables to enable Grafana Cloud integration:
+
+```env
+GRAFANA_OTLP_ENDPOINT=https://otlp-gateway-prod-ap-south-1.grafana.net/otlp
+GRAFANA_OTLP_HEADERS=Authorization=Basic <base64-encoded-instanceid:api-token>
+```
+
+If not configured, logs will only go to CloudWatch and traces will be disabled.

@@ -54,9 +54,9 @@ export function initTelemetry(): Faro | null {
           captureConsoleDisabledLevels: [], // Capture all levels
         }),
         // Tracing instrumentation for distributed tracing
+        // Requires server CORS to allow traceparent/tracestate headers
         new TracingInstrumentation({
           instrumentationOptions: {
-            // Propagate trace headers to API calls
             propagateTraceHeaderCorsUrls: API_URL
               ? [new RegExp(API_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))]
               : [/localhost/],
