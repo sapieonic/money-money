@@ -6,6 +6,7 @@
 import { EmailProvider, EmailProviderType } from './types';
 import { MailjetProvider } from './providers/mailjet';
 import { ConsoleProvider } from './providers/console';
+import { logger } from '../../utils/telemetry';
 
 // Singleton instances
 let mailjetProvider: MailjetProvider | null = null;
@@ -41,7 +42,7 @@ export function getEmailProviderByType(type: EmailProviderType): EmailProvider {
     case 'console':
       return getConsoleProvider();
     default:
-      console.warn(`Unknown email provider type: ${type}, falling back to console`);
+      logger.warn('Unknown email provider type, falling back to console', { type });
       return getConsoleProvider();
   }
 }
@@ -60,20 +61,20 @@ export function getEmailProvider(): EmailProvider {
   if (explicitProvider) {
     const provider = getEmailProviderByType(explicitProvider);
     if (provider.isConfigured()) {
-      console.log(`Using explicitly configured email provider: ${provider.name}`);
+      logger.info('Using explicitly configured email provider', { provider: provider.name });
       return provider;
     }
-    console.warn(`Explicitly configured provider ${explicitProvider} is not properly configured`);
+    logger.warn('Explicitly configured provider is not properly configured', { provider: explicitProvider });
   }
 
   // Auto-detect based on available credentials
   const mailjet = getMailjetProvider();
   if (mailjet.isConfigured()) {
-    console.log(`Auto-detected email provider: ${mailjet.name}`);
+    logger.info('Auto-detected email provider', { provider: mailjet.name });
     return mailjet;
   }
 
   // Fallback to console
-  console.warn('No email provider configured. Using console provider (emails will not be sent).');
+  logger.warn('No email provider configured. Using console provider (emails will not be sent)');
   return getConsoleProvider();
 }

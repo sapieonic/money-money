@@ -38,6 +38,8 @@ provider:
       allowedHeaders:
         - Content-Type
         - Authorization
+        - traceparent
+        - tracestate
       allowedMethods:
         - GET
         - POST

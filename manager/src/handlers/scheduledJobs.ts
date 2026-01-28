@@ -12,7 +12,7 @@ import {
   generateWeeklyExpenseEmailHTML,
   generateWeeklyExpenseEmailText,
 } from '../services/email';
-import { startRequestSpan, checkColdStart, recordError, flush } from '../utils/telemetry';
+import { startRequestSpan, checkColdStart, recordError, flush, logger } from '../utils/telemetry';
 
 /**
  * Send weekly expense summary emails to all opted-in users
@@ -30,7 +30,7 @@ export const sendWeeklyExpenseSummaries = async (
     },
     async () => {
       checkColdStart();
-      console.log('Starting weekly expense summary job...');
+      logger.info('Starting weekly expense summary job');
 
       try {
     await connectToDatabase();
@@ -40,7 +40,7 @@ export const sendWeeklyExpenseSummaries = async (
       'emailPreferences.weeklyExpenseSummary': true,
     });
 
-    console.log(`Found ${users.length} users opted in for weekly summaries`);
+    logger.info('Found users opted in for weekly summaries', { count: users.length });
 
     let sent = 0;
     let errors = 0;
@@ -57,7 +57,7 @@ export const sendWeeklyExpenseSummaries = async (
 
         // Skip if no expenses this week
         if (analytics.transactionCount === 0) {
-          console.log(`Skipping ${user.email} - no expenses last week`);
+          logger.info('Skipping user - no expenses last week', { email: user.email });
           continue;
         }
 
@@ -76,18 +76,18 @@ export const sendWeeklyExpenseSummaries = async (
 
         if (success) {
           sent++;
-          console.log(`Sent weekly summary to ${user.email}`);
+          logger.info('Sent weekly summary', { email: user.email });
         } else {
           errors++;
-          console.error(`Failed to send to ${user.email}`);
+          logger.error('Failed to send weekly summary', { email: user.email });
         }
       } catch (err) {
         errors++;
-        console.error(`Error processing user ${user.email}:`, err);
+        logger.error('Error processing user', { email: user.email, error: String(err) });
       }
     }
 
-    console.log(`Weekly summary job complete. Sent: ${sent}, Errors: ${errors}`);
+    logger.info('Weekly summary job complete', { sent, errors });
 
     return {
           success: true,
@@ -96,7 +96,7 @@ export const sendWeeklyExpenseSummaries = async (
           errors,
         };
       } catch (err) {
-        console.error('Weekly summary job failed:', err);
+        logger.error('Weekly summary job failed', { error: String(err) });
         if (err instanceof Error) {
           recordError(err, { 'scheduled.error': 'weekly_summary_failed' });
         }
@@ -163,7 +163,7 @@ export const sendTestWeeklySummary = async (
       message: success ? `Email sent to ${user.email}` : 'Failed to send email',
     };
   } catch (err) {
-    console.error('Test summary failed:', err);
+    logger.error('Test summary failed', { error: String(err) });
     return { success: false, message: String(err) };
   }
 };

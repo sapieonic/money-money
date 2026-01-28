@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import { APIGatewayProxyResultV2 } from 'aws-lambda';
 import { AuthenticatedEvent, LambdaHandler } from '../types';
 import { unauthorized } from '../utils/response';
-import { setUserContext, checkColdStart, recordError, startRequestSpan, flush } from '../utils/telemetry';
+import { setUserContext, checkColdStart, recordError, startRequestSpan, flush, logger } from '../utils/telemetry';
 
 let firebaseApp: admin.app.App | null = null;
 
@@ -70,7 +70,7 @@ export const withAuth = (handler: LambdaHandler) => {
 
           return handler(event);
         } catch (err) {
-          console.error('Auth error:', err);
+          logger.error('Auth error', { error: String(err) });
           if (err instanceof Error) {
             recordError(err, { 'auth.error_type': 'token_verification' });
           }

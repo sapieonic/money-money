@@ -16,7 +16,7 @@ import {
   getHelpMessage,
   TelegramUpdate,
 } from '../services/telegram';
-import { startRequestSpan, checkColdStart, recordError, flush } from '../utils/telemetry';
+import { startRequestSpan, checkColdStart, recordError, flush, logger } from '../utils/telemetry';
 
 // POST /api/telegram/webhook - Receives messages from Telegram (no auth)
 export const webhook = async (event: APIGatewayProxyEventV2): Promise<APIGatewayProxyResultV2> => {
@@ -158,7 +158,7 @@ View in Finance Watch → Daily Expenses`
 
     return success({ ok: true });
       } catch (err) {
-        console.error('Error processing Telegram webhook:', err);
+        logger.error('Error processing Telegram webhook', { error: String(err) });
         if (err instanceof Error) {
           recordError(err, { 'telegram.error': 'webhook_processing' });
         }
@@ -192,7 +192,7 @@ export const status = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       username: user.telegramUsername || null,
     });
   } catch (err) {
-    console.error('Error fetching Telegram status:', err);
+    logger.error('Error fetching Telegram status', { error: String(err) });
     return error('Failed to fetch Telegram status');
   }
 });
@@ -259,7 +259,7 @@ You can now forward bank SMS messages to me, and I'll automatically add them as 
       username: user.telegramUsername,
     });
   } catch (err) {
-    console.error('Error verifying Telegram code:', err);
+    logger.error('Error verifying Telegram code', { error: String(err) });
     return error('Failed to verify code');
   }
 });
@@ -299,7 +299,7 @@ Use /link to reconnect anytime.`
       message: 'Telegram account unlinked successfully',
     });
   } catch (err) {
-    console.error('Error unlinking Telegram:', err);
+    logger.error('Error unlinking Telegram', { error: String(err) });
     return error('Failed to unlink Telegram account');
   }
 });

@@ -4,6 +4,7 @@ import { Investment } from '../models/Investment';
 import { success, error, notFound, badRequest } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { logger } from '../utils/telemetry';
 
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -24,7 +25,7 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(investments);
   } catch (err) {
-    console.error('Error fetching investments:', err);
+    logger.error('Error fetching investments', { error: String(err) });
     return error('Failed to fetch investments');
   }
 });
@@ -56,7 +57,7 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(investment, 201);
   } catch (err) {
-    console.error('Error creating investment:', err);
+    logger.error('Error creating investment', { error: String(err) });
     return error('Failed to create investment');
   }
 });
@@ -90,7 +91,7 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(investment);
   } catch (err) {
-    console.error('Error updating investment:', err);
+    logger.error('Error updating investment', { error: String(err) });
     return error('Failed to update investment');
   }
 });
@@ -122,7 +123,7 @@ export const toggleStatus = withAuth(async (event: AuthenticatedEvent): Promise<
 
     return success(investment);
   } catch (err) {
-    console.error('Error toggling investment status:', err);
+    logger.error('Error toggling investment status', { error: String(err) });
     return error('Failed to update investment status');
   }
 });
@@ -149,7 +150,7 @@ export const remove = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success({ message: 'Investment deleted successfully' });
   } catch (err) {
-    console.error('Error deleting investment:', err);
+    logger.error('Error deleting investment', { error: String(err) });
     return error('Failed to delete investment');
   }
 });

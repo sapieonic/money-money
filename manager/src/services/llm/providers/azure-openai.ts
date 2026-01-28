@@ -8,6 +8,7 @@ import {
   ParsedExpenseResult,
   EXPENSE_PARSING_SYSTEM_PROMPT,
 } from '../types';
+import { logger } from '../../../utils/telemetry';
 
 interface AzureOpenAIConfig {
   apiKey: string;
@@ -112,7 +113,7 @@ export class AzureOpenAIProvider implements ILLMProvider {
         },
       };
     } catch (err) {
-      console.error('Azure OpenAI parsing error:', err);
+      logger.error('Azure OpenAI parsing error', { error: String(err) });
       return {
         success: false,
         error: err instanceof Error ? err.message : 'Unknown error occurred',
@@ -162,7 +163,7 @@ export class AzureOpenAIProvider implements ILLMProvider {
 
       return parsed;
     } catch (err) {
-      console.error('JSON parsing error:', err, 'Content:', content);
+      logger.error('JSON parsing error', { error: String(err), content });
       return { error: 'Failed to parse LLM response as JSON' };
     }
   }

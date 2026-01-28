@@ -6,6 +6,7 @@
 import { ILLMProvider, LLMProviderType } from './types';
 import { AzureOpenAIProvider } from './providers/azure-openai';
 import { FallbackProvider } from './providers/fallback';
+import { logger } from '../../utils/telemetry';
 
 // Cache the provider instance
 let cachedProvider: ILLMProvider | null = null;
@@ -72,10 +73,10 @@ export function getLLMProvider(): ILLMProvider {
 
   // Verify the provider is properly configured
   if (!provider.isConfigured()) {
-    console.warn(`LLM provider '${providerType}' is not properly configured, falling back to regex parser`);
+    logger.warn('LLM provider is not properly configured, falling back to regex parser', { provider: providerType });
     cachedProvider = new FallbackProvider();
   } else {
-    console.log(`Using LLM provider: ${provider.name}`);
+    logger.info('Using LLM provider', { provider: provider.name });
     cachedProvider = provider;
   }
 

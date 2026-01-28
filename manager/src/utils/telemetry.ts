@@ -423,5 +423,155 @@ export async function flush(): Promise<void> {
     clearTimeout(flushTimeout);
     flushTimeout = null;
   }
-  await flushSpans();
+  await Promise.all([flushSpans(), flushLogs()]);
 }
+
+// ============================================================================
+// LOGGING
+// ============================================================================
+
+type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+interface LogRecord {
+  timeUnixNano: string;
+  severityNumber: number;
+  severityText: LogLevel;
+  body: { stringValue: string };
+  attributes: Array<{ key: string; value: { stringValue?: string; intValue?: string; boolValue?: boolean } }>;
+  traceId?: string;
+  spanId?: string;
+}
+
+const severityNumbers: Record<LogLevel, number> = {
+  DEBUG: 5,
+  INFO: 9,
+  WARN: 13,
+  ERROR: 17,
+};
+
+const pendingLogs: LogRecord[] = [];
+let logFlushTimeout: NodeJS.Timeout | null = null;
+
+function createLogRecord(
+  level: LogLevel,
+  message: string,
+  attributes?: Record<string, string | number | boolean>
+): LogRecord {
+  const activeSpan = getActiveSpan();
+  const record: LogRecord = {
+    timeUnixNano: nowNano(),
+    severityNumber: severityNumbers[level],
+    severityText: level,
+    body: { stringValue: message },
+    attributes: [],
+  };
+
+  // Link to current trace/span if available
+  if (activeSpan) {
+    record.traceId = activeSpan.traceId;
+    record.spanId = activeSpan.spanId;
+  } else if (currentContext) {
+    record.traceId = currentContext.traceId;
+    record.spanId = currentContext.spanId;
+  }
+
+  // Add custom attributes
+  if (attributes) {
+    Object.entries(attributes).forEach(([key, value]) => {
+      const attr: { key: string; value: { stringValue?: string; intValue?: string; boolValue?: boolean } } = { key, value: {} };
+      if (typeof value === 'string') {
+        attr.value.stringValue = value;
+      } else if (typeof value === 'number') {
+        attr.value.intValue = String(value);
+      } else if (typeof value === 'boolean') {
+        attr.value.boolValue = value;
+      }
+      record.attributes.push(attr);
+    });
+  }
+
+  return record;
+}
+
+async function flushLogs(): Promise<void> {
+  if (pendingLogs.length === 0 || !config.endpoint) return;
+
+  const logsToSend = [...pendingLogs];
+  pendingLogs.length = 0;
+
+  const payload = {
+    resourceLogs: [{
+      resource: {
+        attributes: [
+          { key: 'service.name', value: { stringValue: config.serviceName } },
+          { key: 'service.version', value: { stringValue: '1.0.0' } },
+          { key: 'deployment.environment', value: { stringValue: config.environment } },
+          { key: 'cloud.provider', value: { stringValue: 'aws' } },
+          { key: 'faas.name', value: { stringValue: process.env.AWS_LAMBDA_FUNCTION_NAME || 'unknown' } },
+        ],
+      },
+      scopeLogs: [{
+        scope: { name: config.serviceName, version: '1.0.0' },
+        logRecords: logsToSend,
+      }],
+    }],
+  };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+    const response = await fetch(`${config.endpoint}/v1/logs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...config.headers,
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error('Failed to send logs:', response.status, errorText);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Log flush timed out');
+    } else {
+      console.error('Error sending logs:', error);
+    }
+  }
+}
+
+function scheduleLogFlush(): void {
+  if (logFlushTimeout) return;
+  logFlushTimeout = setTimeout(async () => {
+    logFlushTimeout = null;
+    await flushLogs();
+  }, 1000);
+}
+
+function log(level: LogLevel, message: string, attributes?: Record<string, string | number | boolean>): void {
+  // Always log to console for CloudWatch
+  const consoleMethod = level === 'ERROR' ? console.error : level === 'WARN' ? console.warn : console.log;
+  consoleMethod(`[${level}]`, message, attributes ? JSON.stringify(attributes) : '');
+
+  // Send to Grafana if configured
+  if (config.endpoint) {
+    pendingLogs.push(createLogRecord(level, message, attributes));
+    scheduleLogFlush();
+  }
+}
+
+/**
+ * Logger that sends logs to both CloudWatch and Grafana
+ */
+export const logger = {
+  debug: (message: string, attributes?: Record<string, string | number | boolean>) => log('DEBUG', message, attributes),
+  info: (message: string, attributes?: Record<string, string | number | boolean>) => log('INFO', message, attributes),
+  warn: (message: string, attributes?: Record<string, string | number | boolean>) => log('WARN', message, attributes),
+  error: (message: string, attributes?: Record<string, string | number | boolean>) => log('ERROR', message, attributes),
+};

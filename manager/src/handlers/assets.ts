@@ -4,6 +4,7 @@ import { Asset } from '../models/Asset';
 import { success, error, notFound, badRequest } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { logger } from '../utils/telemetry';
 
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -21,7 +22,7 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(assets);
   } catch (err) {
-    console.error('Error fetching assets:', err);
+    logger.error('Error fetching assets', { error: String(err) });
     return error('Failed to fetch assets');
   }
 });
@@ -57,7 +58,7 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(asset, 201);
   } catch (err) {
-    console.error('Error creating asset:', err);
+    logger.error('Error creating asset', { error: String(err) });
     return error('Failed to create asset');
   }
 });
@@ -91,7 +92,7 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(asset);
   } catch (err) {
-    console.error('Error updating asset:', err);
+    logger.error('Error updating asset', { error: String(err) });
     return error('Failed to update asset');
   }
 });
@@ -136,7 +137,7 @@ export const updateValue = withAuth(async (event: AuthenticatedEvent): Promise<A
 
     return success(asset);
   } catch (err) {
-    console.error('Error updating asset value:', err);
+    logger.error('Error updating asset value', { error: String(err) });
     return error('Failed to update asset value');
   }
 });
@@ -172,7 +173,7 @@ export const remove = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success({ message: 'Asset deleted successfully' });
   } catch (err) {
-    console.error('Error deleting asset:', err);
+    logger.error('Error deleting asset', { error: String(err) });
     return error('Failed to delete asset');
   }
 });

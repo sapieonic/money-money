@@ -4,6 +4,7 @@ import { Income } from '../models/Income';
 import { success, error, notFound, badRequest } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { logger } from '../utils/telemetry';
 
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -13,7 +14,7 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(incomes);
   } catch (err) {
-    console.error('Error fetching incomes:', err);
+    logger.error('Error fetching incomes', { error: String(err) });
     return error('Failed to fetch incomes');
   }
 });
@@ -44,7 +45,7 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(income, 201);
   } catch (err) {
-    console.error('Error creating income:', err);
+    logger.error('Error creating income', { error: String(err) });
     return error('Failed to create income');
   }
 });
@@ -82,7 +83,7 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success(income);
   } catch (err) {
-    console.error('Error updating income:', err);
+    logger.error('Error updating income', { error: String(err) });
     return error('Failed to update income');
   }
 });
@@ -109,7 +110,7 @@ export const remove = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
 
     return success({ message: 'Income deleted successfully' });
   } catch (err) {
-    console.error('Error deleting income:', err);
+    logger.error('Error deleting income', { error: String(err) });
     return error('Failed to delete income');
   }
 });
