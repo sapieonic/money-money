@@ -1,10 +1,19 @@
 /**
  * OpenTelemetry Telemetry Utilities
  * Custom instrumentation for Finance Watch API
+ *
+ * Uses lightweight SDK approach (no ADOT layer) to stay within Lambda size limits
  */
 
-import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
+import { trace, SpanStatusCode, SpanKind, context } from '@opentelemetry/api';
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
+import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
+import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import { Resource } from '@opentelemetry/resources';
 import {
+  SEMRESATTRS_SERVICE_NAME,
+  SEMRESATTRS_SERVICE_VERSION,
+  SEMRESATTRS_DEPLOYMENT_ENVIRONMENT,
   SEMATTRS_DB_SYSTEM,
   SEMATTRS_DB_NAME,
   SEMATTRS_DB_OPERATION,
@@ -12,6 +21,71 @@ import {
   SEMATTRS_HTTP_URL,
   SEMATTRS_HTTP_STATUS_CODE,
 } from '@opentelemetry/semantic-conventions';
+
+// Initialize OpenTelemetry SDK
+let isInitialized = false;
+
+function initTelemetry(): void {
+  if (isInitialized) return;
+
+  const endpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+  if (!endpoint) {
+    console.log('Telemetry not initialized: OTEL_EXPORTER_OTLP_ENDPOINT not configured');
+    isInitialized = true; // Mark as initialized to avoid repeated attempts
+    return;
+  }
+
+  try {
+    const resource = new Resource({
+      [SEMRESATTRS_SERVICE_NAME]: process.env.OTEL_SERVICE_NAME || 'finance-watch-api',
+      [SEMRESATTRS_SERVICE_VERSION]: '1.0.0',
+      [SEMRESATTRS_DEPLOYMENT_ENVIRONMENT]: process.env.OTEL_RESOURCE_ATTRIBUTES?.split('=')[1] || 'dev',
+      'faas.name': process.env.AWS_LAMBDA_FUNCTION_NAME || 'unknown',
+      'cloud.provider': 'aws',
+      'cloud.region': process.env.AWS_REGION || 'unknown',
+    });
+
+    // Parse headers from environment (format: "Authorization=Basic xxx")
+    const headersStr = process.env.OTEL_EXPORTER_OTLP_HEADERS || '';
+    const headers: Record<string, string> = {};
+    if (headersStr) {
+      headersStr.split(',').forEach((header) => {
+        const [key, ...valueParts] = header.split('=');
+        if (key && valueParts.length > 0) {
+          headers[key.trim()] = valueParts.join('=').trim();
+        }
+      });
+    }
+
+    const exporter = new OTLPTraceExporter({
+      url: `${endpoint}/v1/traces`,
+      headers,
+    });
+
+    const provider = new NodeTracerProvider({
+      resource,
+    });
+
+    // Use BatchSpanProcessor for efficient batching
+    provider.addSpanProcessor(
+      new BatchSpanProcessor(exporter, {
+        maxQueueSize: 100,
+        maxExportBatchSize: 10,
+        scheduledDelayMillis: 1000,
+      })
+    );
+
+    provider.register();
+    isInitialized = true;
+    console.log('OpenTelemetry initialized for Lambda');
+  } catch (error) {
+    console.error('Failed to initialize OpenTelemetry:', error);
+    isInitialized = true; // Mark as initialized to avoid repeated failures
+  }
+}
+
+// Initialize on module load
+initTelemetry();
 
 const tracer = trace.getTracer('finance-watch-api', '1.0.0');
 
@@ -249,17 +323,53 @@ export function setResponseMetadata(
 }
 
 /**
- * Check if this is a cold start
+ * Check if this is a cold start and create a root span for the request
  */
 let isFirstInvocation = true;
 export function checkColdStart(): boolean {
-  const span = trace.getActiveSpan();
   const wasColdStart = isFirstInvocation;
+  isFirstInvocation = false;
 
+  // Try to add cold start attribute to current span
+  const span = trace.getActiveSpan();
   if (span) {
     span.setAttribute('faas.cold_start', wasColdStart);
   }
 
-  isFirstInvocation = false;
   return wasColdStart;
+}
+
+/**
+ * Start a new root span for a Lambda invocation
+ * Use this to wrap your handler logic
+ */
+export function startRequestSpan<T>(
+  name: string,
+  attributes: Record<string, string | number | boolean>,
+  fn: () => Promise<T>
+): Promise<T> {
+  return tracer.startActiveSpan(
+    name,
+    {
+      kind: SpanKind.SERVER,
+      attributes: {
+        ...attributes,
+        'faas.trigger': 'http',
+      },
+    },
+    async (span) => {
+      try {
+        const result = await fn();
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        span.recordException(err);
+        span.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+        throw error;
+      } finally {
+        span.end();
+      }
+    }
+  );
 }
