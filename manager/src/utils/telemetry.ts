@@ -72,6 +72,15 @@ function generateSpanId(): string {
   return Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
 }
 
+// Convert hex string to base64 (required for OTLP JSON format)
+function hexToBase64(hex: string): string {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  }
+  return btoa(String.fromCharCode(...bytes));
+}
+
 function nowNano(): string {
   return (BigInt(Date.now()) * BigInt(1_000_000)).toString();
 }
@@ -94,6 +103,24 @@ async function flushSpans(): Promise<void> {
   const spansToSend = [...pendingSpans];
   pendingSpans.length = 0;
 
+  // Convert spans to OTLP JSON format (snake_case + base64 IDs)
+  const formattedSpans = spansToSend.map(span => ({
+    trace_id: hexToBase64(span.traceId),
+    span_id: hexToBase64(span.spanId),
+    parent_span_id: span.parentSpanId ? hexToBase64(span.parentSpanId) : undefined,
+    name: span.name,
+    kind: span.kind,
+    start_time_unix_nano: span.startTimeUnixNano,
+    end_time_unix_nano: span.endTimeUnixNano,
+    attributes: span.attributes,
+    status: span.status,
+    events: span.events?.map(event => ({
+      name: event.name,
+      time_unix_nano: event.timeUnixNano,
+      attributes: event.attributes,
+    })),
+  }));
+
   const payload = {
     resourceSpans: [{
       resource: {
@@ -107,7 +134,7 @@ async function flushSpans(): Promise<void> {
       },
       scopeSpans: [{
         scope: { name: config.serviceName, version: '1.0.0' },
-        spans: spansToSend,
+        spans: formattedSpans,
       }],
     }],
   };
@@ -499,6 +526,17 @@ async function flushLogs(): Promise<void> {
   const logsToSend = [...pendingLogs];
   pendingLogs.length = 0;
 
+  // Convert logs to OTLP JSON format (snake_case + base64 IDs)
+  const formattedLogs = logsToSend.map(log => ({
+    time_unix_nano: log.timeUnixNano,
+    severity_number: log.severityNumber,
+    severity_text: log.severityText,
+    body: log.body,
+    attributes: log.attributes,
+    trace_id: log.traceId ? hexToBase64(log.traceId) : undefined,
+    span_id: log.spanId ? hexToBase64(log.spanId) : undefined,
+  }));
+
   const payload = {
     resourceLogs: [{
       resource: {
@@ -512,7 +550,7 @@ async function flushLogs(): Promise<void> {
       },
       scopeLogs: [{
         scope: { name: config.serviceName, version: '1.0.0' },
-        logRecords: logsToSend,
+        logRecords: formattedLogs,
       }],
     }],
   };

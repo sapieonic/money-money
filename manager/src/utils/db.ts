@@ -21,7 +21,7 @@ export const connectToDatabase = async (): Promise<typeof mongoose> => {
       dbName,
     });
 
-    logger.info('Connected to MongoDB database', { dbName });
+    console.debug('Connected to MongoDB database', { dbName });
     return cachedConnection;
   } catch (error) {
     logger.error('MongoDB connection error', { error: String(error) });
