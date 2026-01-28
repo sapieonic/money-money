@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from 'firebase/auth';
 import { onAuthChange, signInWithGoogle, signOut, getIdToken } from '../services/firebase';
+import { setTelemetryUser, clearTelemetryUser } from '../telemetry';
 
 interface AuthContextType {
   user: User | null;
@@ -20,6 +21,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const unsubscribe = onAuthChange((user) => {
       setUser(user);
       setLoading(false);
+
+      // Update telemetry user context
+      if (user) {
+        setTelemetryUser(user.uid, user.email, user.displayName);
+      } else {
+        clearTelemetryUser();
+      }
     });
 
     return () => unsubscribe();
@@ -37,6 +45,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = async () => {
     try {
       await signOut();
+      clearTelemetryUser();
     } catch (error) {
       console.error('Sign out error:', error);
       throw error;

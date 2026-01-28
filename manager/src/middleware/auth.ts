@@ -2,6 +2,7 @@ import * as admin from 'firebase-admin';
 import { APIGatewayProxyResultV2 } from 'aws-lambda';
 import { AuthenticatedEvent, LambdaHandler } from '../types';
 import { unauthorized } from '../utils/response';
+import { setUserContext, checkColdStart, recordError } from '../utils/telemetry';
 
 let firebaseApp: admin.app.App | null = null;
 
@@ -19,6 +20,9 @@ const initializeFirebase = (): admin.app.App => {
 
 export const withAuth = (handler: LambdaHandler) => {
   return async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
+    // Check for cold start at the beginning of each invocation
+    checkColdStart();
+
     try {
       const authHeader = event.headers?.authorization || event.headers?.Authorization;
 
@@ -43,9 +47,19 @@ export const withAuth = (handler: LambdaHandler) => {
         picture: decodedToken.picture,
       };
 
+      // Add user context to telemetry span
+      setUserContext({
+        userId: decodedToken.uid,
+        email: decodedToken.email,
+        name: decodedToken.name,
+      });
+
       return handler(event);
     } catch (err) {
       console.error('Auth error:', err);
+      if (err instanceof Error) {
+        recordError(err, { 'auth.error_type': 'token_verification' });
+      }
       return unauthorized('Invalid or expired token');
     }
   };

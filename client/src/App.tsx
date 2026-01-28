@@ -4,6 +4,7 @@ import { ThemeProvider, CssBaseline, Box, Toolbar } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { theme } from './theme/theme';
+import { usePageTracking } from './hooks/usePageTracking';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
 import Login from './pages/Login';
@@ -57,6 +58,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
 const AppLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Track page views
+  usePageTracking();
 
   return (
     <Box sx={{ display: 'flex' }}>
