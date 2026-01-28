@@ -79,8 +79,12 @@ export const withAuth = (handler: LambdaHandler) => {
       }
     );
 
-    // Flush telemetry before Lambda freezes
-    await flush();
+    // Flush telemetry before Lambda freezes (don't let it block response)
+    try {
+      await flush();
+    } catch (e) {
+      console.error('Telemetry flush error:', e);
+    }
 
     return result;
   };

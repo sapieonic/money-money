@@ -113,6 +113,10 @@ async function flushSpans(): Promise<void> {
   };
 
   try {
+    // Use AbortController for timeout (3 second max)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+
     const response = await fetch(`${config.endpoint}/v1/traces`, {
       method: 'POST',
       headers: {
@@ -120,13 +124,22 @@ async function flushSpans(): Promise<void> {
         ...config.headers,
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+
     if (!response.ok) {
-      console.error('Failed to send traces:', response.status, await response.text());
+      const errorText = await response.text().catch(() => 'Unknown error');
+      console.error('Failed to send traces:', response.status, errorText);
     }
   } catch (error) {
-    console.error('Error sending traces:', error);
+    // Don't let telemetry errors affect the request
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Telemetry flush timed out');
+    } else {
+      console.error('Error sending traces:', error);
+    }
   }
 }
 

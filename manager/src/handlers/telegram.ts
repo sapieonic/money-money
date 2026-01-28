@@ -168,7 +168,11 @@ View in Finance Watch → Daily Expenses`
     }
   );
 
-  await flush();
+  try {
+    await flush();
+  } catch (e) {
+    console.error('Telemetry flush error:', e);
+  }
   return result;
 };
 

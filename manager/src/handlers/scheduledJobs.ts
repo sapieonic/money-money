@@ -110,7 +110,11 @@ export const sendWeeklyExpenseSummaries = async (
     }
   );
 
-  await flush();
+  try {
+    await flush();
+  } catch (e) {
+    console.error('Telemetry flush error:', e);
+  }
   return result;
 };
 
