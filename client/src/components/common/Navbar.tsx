@@ -73,19 +73,28 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
           </IconButton>
         )}
 
-        <Typography
-          variant="h6"
-          component="div"
+        <Box
           sx={{
             flexGrow: 1,
-            fontWeight: 700,
-            color: 'primary.main',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
             cursor: 'pointer',
           }}
           onClick={() => navigate('/')}
         >
-          Finance Watch
-        </Typography>
+          <img src="/favicon.png" alt="Finance Watch" style={{ height: 32 }} />
+          <Typography
+            variant="h6"
+            component="div"
+            sx={{
+              fontWeight: 700,
+              color: 'primary.main',
+            }}
+          >
+            Finance Watch
+          </Typography>
+        </Box>
 
         {user && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

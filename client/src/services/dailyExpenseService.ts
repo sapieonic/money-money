@@ -1,24 +1,28 @@
 import api from './api';
-import type { DailyExpense, DailyExpenseSummary, WeeklyExpenseAnalytics, SendWeeklySummaryResponse, ApiResponse } from '../types';
+import type { DailyExpense, DailyExpenseSummary, WeeklyExpenseAnalytics, SendWeeklySummaryResponse, PaginatedResponse, ApiResponse } from '../types';
 
 export interface DailyExpenseFilters {
   startDate?: string;
   endDate?: string;
   category?: string;
+  page?: number;
+  limit?: number;
 }
 
 export const dailyExpenseService = {
-  getAll: async (filters?: DailyExpenseFilters): Promise<DailyExpense[]> => {
+  getAll: async (filters?: DailyExpenseFilters): Promise<PaginatedResponse<DailyExpense>> => {
     const params = new URLSearchParams();
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.category) params.append('category', filters.category);
+    if (filters?.page) params.append('page', filters.page.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
 
     const queryString = params.toString();
-    const response = await api.get<ApiResponse<DailyExpense[]>>(
+    const response = await api.get<ApiResponse<PaginatedResponse<DailyExpense>>>(
       `/api/daily-expenses${queryString ? `?${queryString}` : ''}`
     );
-    return response.data.data || [];
+    return response.data.data!;
   },
 
   getSummary: async (): Promise<DailyExpenseSummary> => {
