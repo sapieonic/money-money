@@ -13,12 +13,17 @@ import {
 } from '../services/email';
 import { logger } from '../utils/telemetry';
 
-// GET /api/daily-expenses - Get all with optional date range filtering
+// GET /api/daily-expenses - Get all with optional date range filtering and pagination
 export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
     await connectToDatabase();
 
-    const { startDate, endDate, category } = event.queryStringParameters || {};
+    const { startDate, endDate, category, page: pageStr, limit: limitStr } = event.queryStringParameters || {};
+
+    // Pagination
+    const page = Math.max(1, parseInt(pageStr || '1', 10));
+    const limit = Math.min(200, Math.max(1, parseInt(limitStr || '50', 10)));
+    const skip = (page - 1) * limit;
 
     // Build query
     const query: Record<string, unknown> = {
@@ -45,9 +50,18 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       query.category = category;
     }
 
-    const expenses = await DailyExpense.find(query).sort({ date: -1, createdAt: -1 });
+    const [items, total] = await Promise.all([
+      DailyExpense.find(query).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit),
+      DailyExpense.countDocuments(query),
+    ]);
 
-    return success(expenses);
+    return success({
+      items,
+      total,
+      page,
+      limit,
+      hasMore: skip + items.length < total,
+    });
   } catch (err) {
     logger.error('Error fetching daily expenses', { error: String(err) });
     return error('Failed to fetch daily expenses');

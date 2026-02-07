@@ -215,6 +215,14 @@ export interface MonthlyLedgerResponse {
   dailyExpensesTotal: number;
 }
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;

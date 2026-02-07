@@ -23,6 +23,7 @@ import ExpenseForm from '../components/expenses/ExpenseForm';
 import InvestmentForm from '../components/investments/InvestmentForm';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { monthlyLedgerService } from '../services/monthlyLedgerService';
+import { dailyExpenseService } from '../services/dailyExpenseService';
 import { settingsService } from '../services/settingsService';
 import type {
   MonthlyLedger,
@@ -30,13 +31,13 @@ import type {
   LedgerIncomeItem,
   LedgerExpenseItem,
   LedgerInvestmentItem,
+  DailyExpense,
   Income,
   Expense,
   Investment,
 } from '../types';
-import { formatCurrency } from '../utils/formatters';
-import { categoryColors, expenseCategoryColors } from '../theme/theme';
-import { capitalizeFirst } from '../utils/formatters';
+import { formatCurrency, capitalizeFirst, formatDate } from '../utils/formatters';
+import { categoryColors, expenseCategoryColors, dailyExpenseCategoryColors } from '../theme/theme';
 
 const incomeTypeColors: Record<string, string> = {
   salary: '#4caf50',
@@ -63,6 +64,7 @@ const MonthlyTracker: React.FC = () => {
   const [month, setMonth] = useState(getCurrentMonth());
   const [ledger, setLedger] = useState<MonthlyLedger | null>(null);
   const [dailyExpensesTotal, setDailyExpensesTotal] = useState(0);
+  const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -80,19 +82,29 @@ const MonthlyTracker: React.FC = () => {
   const [deletingItem, setDeletingItem] = useState<{ section: LedgerSectionType; item: { _id: string; name: string } } | null>(null);
 
   useEffect(() => {
-    loadLedger();
+    loadData();
   }, [month]);
 
   useEffect(() => {
     loadSettings();
   }, []);
 
-  const loadLedger = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const result = await monthlyLedgerService.getOrCreate(month);
-      setLedger(result.ledger);
-      setDailyExpensesTotal(result.dailyExpensesTotal);
+      const [year, monthNum] = month.split('-').map(Number);
+      const lastDay = new Date(year, monthNum, 0).getDate();
+      const startDate = `${month}-01`;
+      const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
+
+      const [ledgerResult, dailyExpensesResult] = await Promise.all([
+        monthlyLedgerService.getOrCreate(month),
+        dailyExpenseService.getAll({ startDate, endDate, limit: 200 }),
+      ]);
+
+      setLedger(ledgerResult.ledger);
+      setDailyExpensesTotal(ledgerResult.dailyExpensesTotal);
+      setDailyExpenses(dailyExpensesResult.items);
       setError(null);
     } catch (err) {
       setError('Failed to load monthly ledger');
@@ -165,7 +177,7 @@ const MonthlyTracker: React.FC = () => {
       }
       setIncomeFormOpen(false);
       setRsuFormOpen(false);
-      loadLedger();
+      loadData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -182,7 +194,7 @@ const MonthlyTracker: React.FC = () => {
         await monthlyLedgerService.addItem(month, 'expenses', data as Record<string, unknown>);
       }
       setExpenseFormOpen(false);
-      loadLedger();
+      loadData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -199,7 +211,7 @@ const MonthlyTracker: React.FC = () => {
         await monthlyLedgerService.addItem(month, 'investments', data as Record<string, unknown>);
       }
       setInvestmentFormOpen(false);
-      loadLedger();
+      loadData();
     } catch (err) {
       console.error(err);
     } finally {
@@ -225,6 +237,17 @@ const MonthlyTracker: React.FC = () => {
     .filter((inv) => inv.type === 'voluntary')
     .reduce((sum, inv) => sum + inv.amount, 0) || 0;
   const remaining = totalIncome - totalExpenses - totalSIPs - totalInvestments - dailyExpensesTotal;
+
+  // Map daily expenses to LedgerSection-compatible items
+  const dailyExpenseItems = dailyExpenses.map((de) => ({
+    _id: de._id,
+    sourceId: de._id,
+    name: `${de.description}${de.vendor ? ` (${de.vendor})` : ''}`,
+    amount: de.amount,
+    currency: de.currency,
+    category: de.category,
+    date: de.date,
+  }));
 
   if (loading) {
     return (
@@ -328,9 +351,7 @@ const MonthlyTracker: React.FC = () => {
             onAdd={handleAdd}
             onEdit={handleEdit}
             onDelete={handleDelete}
-            formatAmount={(amount, currency) => {
-              return formatCurrency(amount, currency || 'INR');
-            }}
+            formatAmount={(amount, currency) => formatCurrency(amount, currency || 'INR')}
             getChipLabel={(item) => capitalizeFirst((item as unknown as LedgerIncomeItem).type)}
             getChipColor={(item) => incomeTypeColors[(item as unknown as LedgerIncomeItem).type] || incomeTypeColors.other}
           />
@@ -360,6 +381,24 @@ const MonthlyTracker: React.FC = () => {
               return `${capitalizeFirst(inv.type)} - ${capitalizeFirst(inv.category)}`;
             }}
             getChipColor={(item) => investmentCategoryColors[(item as unknown as LedgerInvestmentItem).category] || investmentCategoryColors.other}
+          />
+
+          <LedgerSection
+            title="Daily Expenses"
+            items={dailyExpenseItems}
+            sectionKey="expenses"
+            readOnly
+            defaultExpanded={false}
+            subtitle={`Total: ${formatCurrency(dailyExpensesTotal)}`}
+            formatAmount={(amount) => formatCurrency(amount)}
+            getChipLabel={(item) => {
+              const de = item as unknown as { category: string; date: string };
+              return `${capitalizeFirst(de.category)} - ${formatDate(de.date)}`;
+            }}
+            getChipColor={(item) => {
+              const de = item as unknown as { category: string };
+              return dailyExpenseCategoryColors[de.category] || dailyExpenseCategoryColors.other;
+            }}
           />
         </>
       )}

@@ -9,7 +9,7 @@ import {
   Grid,
   Snackbar,
 } from '@mui/material';
-import { Add, Email } from '@mui/icons-material';
+import { Add, Email, ExpandMore } from '@mui/icons-material';
 import DailyExpenseList from '../components/daily-expenses/DailyExpenseList';
 import DailyExpenseForm from '../components/daily-expenses/DailyExpenseForm';
 import DateRangeFilter from '../components/daily-expenses/DateRangeFilter';
@@ -20,11 +20,17 @@ import type { DailyExpenseFilters } from '../services/dailyExpenseService';
 import type { DailyExpense, DailyExpenseSummary, WeeklyExpenseAnalytics } from '../types';
 import { formatCurrency } from '../utils/formatters';
 
+const PAGE_SIZE = 50;
+
 const DailyExpenses: React.FC = () => {
   const [expenses, setExpenses] = useState<DailyExpense[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [page, setPage] = useState(1);
   const [summary, setSummary] = useState<DailyExpenseSummary | null>(null);
   const [weeklyAnalytics, setWeeklyAnalytics] = useState<WeeklyExpenseAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<DailyExpense | null>(
@@ -49,35 +55,65 @@ const DailyExpenses: React.FC = () => {
     severity: 'success',
   });
 
-  const loadExpenses = useCallback(async () => {
+  const loadExpenses = useCallback(async (loadPage = 1, append = false) => {
     try {
-      setLoading(true);
-      const filters: DailyExpenseFilters = {};
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      const filters: DailyExpenseFilters = {
+        page: loadPage,
+        limit: PAGE_SIZE,
+      };
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
       if (categoryFilter) filters.category = categoryFilter;
 
-      const [expensesData, summaryData, analyticsData] = await Promise.all([
+      const requests: [ReturnType<typeof dailyExpenseService.getAll>, ...Promise<unknown>[]] = [
         dailyExpenseService.getAll(filters),
-        dailyExpenseService.getSummary(),
-        dailyExpenseService.getWeeklyAnalytics(),
-      ]);
+      ];
 
-      setExpenses(expensesData);
-      setSummary(summaryData);
-      setWeeklyAnalytics(analyticsData);
+      // Only load summary and analytics on initial load (not on "load more")
+      if (!append) {
+        requests.push(
+          dailyExpenseService.getSummary(),
+          dailyExpenseService.getWeeklyAnalytics(),
+        );
+      }
+
+      const results = await Promise.all(requests);
+      const expensesData = results[0] as Awaited<ReturnType<typeof dailyExpenseService.getAll>>;
+
+      if (append) {
+        setExpenses((prev) => [...prev, ...expensesData.items]);
+      } else {
+        setExpenses(expensesData.items);
+        setSummary(results[1] as DailyExpenseSummary);
+        setWeeklyAnalytics(results[2] as WeeklyExpenseAnalytics);
+      }
+
+      setTotalCount(expensesData.total);
+      setHasMore(expensesData.hasMore);
+      setPage(loadPage);
       setError(null);
     } catch (err) {
       setError('Failed to load daily expenses');
       console.error(err);
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   }, [startDate, endDate, categoryFilter]);
 
   useEffect(() => {
-    loadExpenses();
+    loadExpenses(1, false);
   }, [loadExpenses]);
+
+  const handleLoadMore = () => {
+    loadExpenses(page + 1, true);
+  };
 
   const handleAdd = () => {
     setEditingExpense(null);
@@ -103,7 +139,7 @@ const DailyExpenses: React.FC = () => {
         await dailyExpenseService.create(data);
       }
       setFormOpen(false);
-      loadExpenses();
+      loadExpenses(1, false);
     } catch (err) {
       console.error(err);
     } finally {
@@ -117,7 +153,7 @@ const DailyExpenses: React.FC = () => {
       await dailyExpenseService.delete(deletingExpense._id);
       setDeleteDialogOpen(false);
       setDeletingExpense(null);
-      loadExpenses();
+      loadExpenses(1, false);
     } catch (err) {
       console.error(err);
     }
@@ -178,7 +214,7 @@ const DailyExpenses: React.FC = () => {
       >
         <Box>
           <Typography variant="h4" fontWeight={700} gutterBottom>
-            Daily Expenses
+            Daily Spending
           </Typography>
           <Typography variant="body2" color="text.secondary">
             Track your day-to-day spending
@@ -239,7 +275,7 @@ const DailyExpenses: React.FC = () => {
           <Grid size={{ xs: 12, sm: 4 }}>
             <Paper sx={{ p: 2, backgroundColor: 'info.light' }}>
               <Typography variant="body2" color="info.contrastText">
-                Filtered Total
+                Filtered Total ({expenses.length} of {totalCount})
               </Typography>
               <Typography
                 variant="h5"
@@ -273,6 +309,20 @@ const DailyExpenses: React.FC = () => {
         onEdit={handleEdit}
         onDelete={handleDelete}
       />
+
+      {/* Load More */}
+      {hasMore && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
+          <Button
+            variant="outlined"
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            startIcon={loadingMore ? <CircularProgress size={16} /> : <ExpandMore />}
+          >
+            {loadingMore ? 'Loading...' : `Load More (${expenses.length} of ${totalCount})`}
+          </Button>
+        </Box>
+      )}
 
       {/* Form Dialog */}
       <DailyExpenseForm

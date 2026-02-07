@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Typography,
@@ -9,8 +9,9 @@ import {
   IconButton,
   Button,
   Chip,
+  Collapse,
 } from '@mui/material';
-import { Add, Edit, Delete } from '@mui/icons-material';
+import { Add, Edit, Delete, ExpandMore, ExpandLess } from '@mui/icons-material';
 import type { LedgerSection as LedgerSectionType } from '../../types';
 
 interface LedgerItem {
@@ -25,12 +26,15 @@ interface LedgerSectionProps {
   title: string;
   items: LedgerItem[];
   sectionKey: LedgerSectionType;
-  onAdd: (section: LedgerSectionType) => void;
-  onEdit: (section: LedgerSectionType, item: LedgerItem) => void;
-  onDelete: (section: LedgerSectionType, item: LedgerItem) => void;
+  onAdd?: (section: LedgerSectionType) => void;
+  onEdit?: (section: LedgerSectionType, item: LedgerItem) => void;
+  onDelete?: (section: LedgerSectionType, item: LedgerItem) => void;
   formatAmount: (amount: number, currency?: string) => string;
   getChipLabel?: (item: LedgerItem) => string;
   getChipColor?: (item: LedgerItem) => string;
+  defaultExpanded?: boolean;
+  readOnly?: boolean;
+  subtitle?: string;
 }
 
 const LedgerSection: React.FC<LedgerSectionProps> = ({
@@ -43,87 +47,127 @@ const LedgerSection: React.FC<LedgerSectionProps> = ({
   formatAmount,
   getChipLabel,
   getChipColor,
+  defaultExpanded = true,
+  readOnly = false,
+  subtitle,
 }) => {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
   return (
-    <Paper sx={{ p: 3, mb: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" fontWeight={600}>
-          {title}
-        </Typography>
-        <Button
-          startIcon={<Add />}
-          variant="outlined"
-          size="small"
-          onClick={() => onAdd(sectionKey)}
-        >
-          Add
-        </Button>
-      </Box>
-      {items.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
-          No items yet
-        </Typography>
-      ) : (
-        <List dense disablePadding>
-          {items.map((item) => (
-            <ListItem
-              key={item._id}
-              sx={{
-                py: 1.5,
-                borderBottom: '1px solid',
-                borderColor: 'divider',
-                '&:last-child': { borderBottom: 'none' },
+    <Paper sx={{ mb: 3, overflow: 'hidden' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          p: 2,
+          pb: expanded ? 0 : 2,
+          cursor: 'pointer',
+          userSelect: 'none',
+        }}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Typography variant="h6" fontWeight={600}>
+            {title}
+          </Typography>
+          <Chip label={items.length} size="small" sx={{ height: 22, fontSize: '0.75rem' }} />
+          {subtitle && (
+            <Typography variant="body2" color="text.secondary">
+              {subtitle}
+            </Typography>
+          )}
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          {!readOnly && onAdd && (
+            <Button
+              startIcon={<Add />}
+              variant="outlined"
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAdd(sectionKey);
               }}
-              secondaryAction={
-                <Box>
-                  <IconButton size="small" onClick={() => onEdit(sectionKey, item)}>
-                    <Edit fontSize="small" />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => onDelete(sectionKey, item)} color="error">
-                    <Delete fontSize="small" />
-                  </IconButton>
-                </Box>
-              }
             >
-              <ListItemText
-                primary={
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="body2" fontWeight={500}>
-                      {item.name}
-                    </Typography>
-                    {getChipLabel && (
-                      <Chip
-                        label={getChipLabel(item)}
-                        size="small"
-                        sx={{
-                          height: 20,
-                          fontSize: '0.7rem',
-                          backgroundColor: getChipColor ? `${getChipColor(item)}20` : undefined,
-                          color: getChipColor ? getChipColor(item) : undefined,
-                        }}
-                      />
-                    )}
-                    {item.sourceId === null && (
-                      <Chip
-                        label="Ad-hoc"
-                        size="small"
-                        variant="outlined"
-                        color="info"
-                        sx={{ height: 20, fontSize: '0.7rem' }}
-                      />
-                    )}
-                  </Box>
-                }
-                secondary={
-                  <Typography variant="body2" fontWeight={600} color="text.primary">
-                    {formatAmount(item.amount, item.currency as string)}
-                  </Typography>
-                }
-              />
-            </ListItem>
-          ))}
-        </List>
-      )}
+              Add
+            </Button>
+          )}
+          <IconButton size="small">
+            {expanded ? <ExpandLess /> : <ExpandMore />}
+          </IconButton>
+        </Box>
+      </Box>
+      <Collapse in={expanded}>
+        <Box sx={{ px: 2, pb: 2, pt: 1 }}>
+          {items.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2, textAlign: 'center' }}>
+              No items yet
+            </Typography>
+          ) : (
+            <List dense disablePadding>
+              {items.map((item) => (
+                <ListItem
+                  key={item._id}
+                  sx={{
+                    py: 1.5,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    '&:last-child': { borderBottom: 'none' },
+                  }}
+                  secondaryAction={
+                    !readOnly && onEdit && onDelete ? (
+                      <Box>
+                        <IconButton size="small" onClick={() => onEdit(sectionKey, item)}>
+                          <Edit fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={() => onDelete(sectionKey, item)} color="error">
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ) : undefined
+                  }
+                >
+                  <ListItemText
+                    primary={
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2" fontWeight={500}>
+                          {item.name}
+                        </Typography>
+                        {getChipLabel && (
+                          <Chip
+                            label={getChipLabel(item)}
+                            size="small"
+                            sx={{
+                              height: 20,
+                              fontSize: '0.7rem',
+                              backgroundColor: getChipColor ? `${getChipColor(item)}20` : undefined,
+                              color: getChipColor ? getChipColor(item) : undefined,
+                            }}
+                          />
+                        )}
+                        {item.sourceId === null && !readOnly && (
+                          <Chip
+                            label="Ad-hoc"
+                            size="small"
+                            variant="outlined"
+                            color="info"
+                            sx={{ height: 20, fontSize: '0.7rem' }}
+                          />
+                        )}
+                      </Box>
+                    }
+                    secondary={
+                      <Typography variant="body2" fontWeight={600} color="text.primary">
+                        {formatAmount(item.amount, item.currency as string)}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </Box>
+      </Collapse>
     </Paper>
   );
 };
