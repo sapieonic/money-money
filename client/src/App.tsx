@@ -14,6 +14,7 @@ import Expenses from './pages/Expenses';
 import DailyExpenses from './pages/DailyExpenses';
 import Investments from './pages/Investments';
 import Assets from './pages/Assets';
+import MonthlyTracker from './pages/MonthlyTracker';
 import Settings from './pages/Settings';
 
 const queryClient = new QueryClient({
@@ -84,6 +85,7 @@ const AppLayout: React.FC = () => {
           <Route path="/daily-expenses" element={<DailyExpenses />} />
           <Route path="/investments" element={<Investments />} />
           <Route path="/assets" element={<Assets />} />
+          <Route path="/monthly-tracker" element={<MonthlyTracker />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </Box>

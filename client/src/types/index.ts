@@ -157,6 +157,64 @@ export interface Snapshot {
   createdAt: string;
 }
 
+export type LedgerStatus = 'draft' | 'finalized';
+export type LedgerSection = 'incomes' | 'expenses' | 'investments';
+
+export interface LedgerIncomeItem {
+  _id: string;
+  sourceId: string | null;
+  name: string;
+  amount: number;
+  preTaxAmount?: number;
+  postTaxAmount?: number;
+  taxPaid?: number;
+  currency: string;
+  type: IncomeType;
+  units?: number;
+  unitPrice?: number;
+  vestPeriod?: VestPeriod;
+}
+
+export interface LedgerExpenseItem {
+  _id: string;
+  sourceId: string | null;
+  name: string;
+  amount: number;
+  currency: string;
+  category: ExpenseCategory;
+  isRecurring: boolean;
+}
+
+export interface LedgerInvestmentItem {
+  _id: string;
+  sourceId: string | null;
+  name: string;
+  type: InvestmentType;
+  amount: number;
+  currency: string;
+  platform: string;
+  category: InvestmentCategory;
+  status: InvestmentStatus;
+}
+
+export interface MonthlyLedger {
+  _id: string;
+  userId: string;
+  month: string;
+  status: LedgerStatus;
+  incomes: LedgerIncomeItem[];
+  expenses: LedgerExpenseItem[];
+  investments: LedgerInvestmentItem[];
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MonthlyLedgerResponse {
+  ledger: MonthlyLedger;
+  dailyExpensesTotal: number;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;

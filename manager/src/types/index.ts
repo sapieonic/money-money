@@ -30,6 +30,8 @@ export type InvestmentCategory = 'mutual_fund' | 'stocks' | 'crypto' | 'other';
 
 export type InvestmentStatus = 'active' | 'paused' | 'stopped';
 
+export type LedgerStatus = 'draft' | 'finalized';
+
 export type AssetCategory = 'stocks' | 'mutual_fund' | 'crypto' | 'fd' | 'real_estate' | 'rsu' | 'other';
 
 export interface ValueHistoryEntry {
