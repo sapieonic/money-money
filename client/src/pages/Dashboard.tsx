@@ -118,6 +118,7 @@ const Dashboard: React.FC = () => {
   const allocationData = [
     { name: 'Tax', value: totalTaxPaid, color: categoryColors.tax },
     { name: 'Expenses', value: summary.totalExpenses, color: categoryColors.expenses },
+    { name: 'Daily Expenses', value: summary.dailyExpensesThisMonth || 0, color: '#ef5350' },
     { name: 'SIPs', value: summary.totalSIPs, color: categoryColors.sip },
     { name: 'Investments', value: summary.totalVoluntaryInvestments, color: categoryColors.voluntary },
     { name: 'Remaining', value: summary.remaining, color: categoryColors.remaining },

@@ -59,6 +59,14 @@ A full-stack personal finance management application to track income, expenses, 
 - Quick stats: daily average, top category, week comparison
 - Visual spending trends
 
+### Monthly Tracker
+- **Per-month ledger** — clones active templates on first access, then tracks month-specific changes
+- Add, edit, or remove income, expense, and investment items for any month without affecting global templates
+- **Ad-hoc items** — add one-off entries (e.g., a bonus, extra bill) that only appear in that month
+- Summary cards: Total Income, Expenses, SIPs, Investments, Daily Expenses, Remaining
+- Month picker to navigate between months
+- **Dashboard integration** — dashboard summary automatically uses ledger data for the current month when available
+
 ### Dashboard
 - Visual allocation breakdown with donut chart
 - Income sources with tax breakdown per entry
@@ -97,7 +105,8 @@ money-money/
 │   │   │   ├── expenses/      # Expense-related components
 │   │   │   ├── daily-expenses/# Daily expense components
 │   │   │   ├── investments/   # Investment-related components
-│   │   │   └── assets/        # Asset-related components
+│   │   │   ├── assets/        # Asset-related components
+│   │   │   └── monthly-tracker/ # Monthly tracker components
 │   │   ├── pages/             # Page components
 │   │   ├── services/          # API service functions
 │   │   ├── context/           # React context (Auth)
@@ -272,6 +281,14 @@ npm run build
 | PUT | `/api/investments/{id}` | Update investment |
 | PATCH | `/api/investments/{id}/status` | Toggle investment status |
 | DELETE | `/api/investments/{id}` | Delete investment |
+
+### Monthly Ledger
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/monthly-ledger?month=YYYY-MM` | Get or create a monthly ledger (clones templates on first access) |
+| POST | `/api/monthly-ledger/{month}/items` | Add an item to a ledger section |
+| PUT | `/api/monthly-ledger/{month}/items/{itemId}` | Update a ledger item |
+| DELETE | `/api/monthly-ledger/{month}/items/{itemId}?section=X` | Remove a ledger item |
 
 ### Assets
 | Method | Endpoint | Description |

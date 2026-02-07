@@ -19,6 +19,7 @@ import {
   ShoppingCart,
   TrendingUp,
   AccountBalanceWallet,
+  CalendarMonth,
   Settings,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -37,6 +38,7 @@ const menuItems = [
   { text: 'Daily Expenses', icon: <ShoppingCart />, path: '/daily-expenses' },
   { text: 'Investments', icon: <TrendingUp />, path: '/investments' },
   { text: 'Assets', icon: <AccountBalanceWallet />, path: '/assets' },
+  { text: 'Monthly Tracker', icon: <CalendarMonth />, path: '/monthly-tracker' },
 ];
 
 const bottomMenuItems = [

@@ -206,6 +206,35 @@ functions:
           path: /api/investments/{id}
           method: delete
 
+  # Monthly Ledger endpoints
+  getOrCreateLedger:
+    handler: src/handlers/monthlyLedger.getOrCreate
+    events:
+      - httpApi:
+          path: /api/monthly-ledger
+          method: get
+
+  addLedgerItem:
+    handler: src/handlers/monthlyLedger.addItem
+    events:
+      - httpApi:
+          path: /api/monthly-ledger/{month}/items
+          method: post
+
+  updateLedgerItem:
+    handler: src/handlers/monthlyLedger.updateItem
+    events:
+      - httpApi:
+          path: /api/monthly-ledger/{month}/items/{itemId}
+          method: put
+
+  removeLedgerItem:
+    handler: src/handlers/monthlyLedger.removeItem
+    events:
+      - httpApi:
+          path: /api/monthly-ledger/{month}/items/{itemId}
+          method: delete
+
   # Asset endpoints
   getAssets:
     handler: src/handlers/assets.getAll
