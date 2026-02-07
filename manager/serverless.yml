@@ -52,7 +52,7 @@ build:
   esbuild:
     bundle: true
     minify: false
-    sourcemap: true
+    sourcemap: false
     exclude:
       - aws-sdk
     target: node20
