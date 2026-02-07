@@ -6,12 +6,14 @@
 import { ScheduledEvent, Context } from 'aws-lambda';
 import { connectToDatabase } from '../utils/db';
 import { User } from '../models/User';
-import { generateWeeklyAnalytics } from '../services/analytics';
+import { generateWeeklyAnalytics, generateDailyDigestData } from '../services/analytics';
 import {
   sendWeeklyExpenseSummary,
   generateWeeklyExpenseEmailHTML,
   generateWeeklyExpenseEmailText,
 } from '../services/email';
+import { generateDailyNarrative } from '../services/llm/dailyNarrative';
+import { sendTelegramMessage } from '../services/telegram';
 import { startRequestSpan, checkColdStart, recordError, flush, logger } from '../utils/telemetry';
 
 /**
@@ -104,6 +106,105 @@ export const sendWeeklyExpenseSummaries = async (
           success: false,
           processed: 0,
           sent: 0,
+          errors: 1,
+        };
+      }
+    }
+  );
+
+  try {
+    await flush();
+  } catch (e) {
+    console.error('Telemetry flush error:', e);
+  }
+  return result;
+};
+
+/**
+ * Send daily AI expense digests via Telegram to all linked users
+ * Triggered every day at 9:30 PM IST
+ */
+export const sendDailyTelegramDigests = async (
+  event: ScheduledEvent,
+  context: Context
+): Promise<{ success: boolean; processed: number; sent: number; skipped: number; errors: number }> => {
+  const result = await startRequestSpan(
+    'scheduled.dailyTelegramDigest',
+    {
+      'faas.trigger': 'timer',
+      'scheduled.job': 'daily_telegram_digest',
+    },
+    async () => {
+      checkColdStart();
+      logger.info('Starting daily Telegram digest job');
+
+      try {
+        await connectToDatabase();
+
+        // Find all users with linked Telegram accounts
+        const users = await User.find({
+          telegramChatId: { $exists: true, $ne: null },
+        });
+
+        logger.info('Found users with Telegram linked', { count: users.length });
+
+        let sent = 0;
+        let skipped = 0;
+        let errors = 0;
+
+        for (const user of users) {
+          try {
+            // Generate daily digest data
+            const digestData = await generateDailyDigestData(user.firebaseUid, new Date());
+
+            // Skip if no expenses today
+            if (!digestData) {
+              skipped++;
+              logger.info('Skipping user - no expenses today', { userId: user.firebaseUid });
+              continue;
+            }
+
+            // Generate AI narrative
+            const narrative = await generateDailyNarrative(digestData, user.name);
+
+            // Send via Telegram
+            const messageSent = await sendTelegramMessage(user.telegramChatId!, narrative);
+
+            if (messageSent) {
+              sent++;
+              logger.info('Sent daily digest', { userId: user.firebaseUid });
+            } else {
+              errors++;
+              logger.error('Failed to send daily digest', { userId: user.firebaseUid });
+            }
+          } catch (err) {
+            errors++;
+            logger.error('Error processing user for daily digest', {
+              userId: user.firebaseUid,
+              error: String(err),
+            });
+          }
+        }
+
+        logger.info('Daily Telegram digest job complete', { sent, skipped, errors });
+
+        return {
+          success: true,
+          processed: users.length,
+          sent,
+          skipped,
+          errors,
+        };
+      } catch (err) {
+        logger.error('Daily Telegram digest job failed', { error: String(err) });
+        if (err instanceof Error) {
+          recordError(err, { 'scheduled.error': 'daily_telegram_digest_failed' });
+        }
+        return {
+          success: false,
+          processed: 0,
+          sent: 0,
+          skipped: 0,
           errors: 1,
         };
       }

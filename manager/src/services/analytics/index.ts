@@ -3,3 +3,4 @@
  */
 
 export * from './weeklyExpenseAnalytics';
+export * from './dailyExpenseAnalytics';
