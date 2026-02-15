@@ -41,6 +41,7 @@ export interface Expense {
   currency: string;
   category: ExpenseCategory;
   isRecurring: boolean;
+  dueDate?: number; // Day of month (1-31) when expense is due
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -183,6 +184,7 @@ export interface LedgerExpenseItem {
   currency: string;
   category: ExpenseCategory;
   isRecurring: boolean;
+  dueDate?: number; // Day of month (1-31) when expense is due
 }
 
 export interface LedgerInvestmentItem {

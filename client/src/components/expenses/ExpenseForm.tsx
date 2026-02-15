@@ -14,6 +14,7 @@ import {
   Box,
   FormControlLabel,
   Switch,
+  FormHelperText,
 } from '@mui/material';
 import type { Expense, ExpenseCategory } from '../../types';
 
@@ -45,6 +46,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState<ExpenseCategory>('other');
   const [isRecurring, setIsRecurring] = useState(true);
+  const [dueDate, setDueDate] = useState<number | ''>('');
 
   useEffect(() => {
     if (initialData) {
@@ -52,11 +54,13 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       setAmount(initialData.amount.toString());
       setCategory(initialData.category);
       setIsRecurring(initialData.isRecurring);
+      setDueDate(initialData.dueDate ?? '');
     } else {
       setName('');
       setAmount('');
       setCategory('other');
       setIsRecurring(true);
+      setDueDate('');
     }
   }, [initialData, open]);
 
@@ -67,6 +71,7 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
       amount: parseFloat(amount),
       category,
       isRecurring,
+      ...(dueDate !== '' && { dueDate: Number(dueDate) }),
       currency: 'INR',
     });
   };
@@ -124,6 +129,26 @@ const ExpenseForm: React.FC<ExpenseFormProps> = ({
               }
               label="Recurring (Monthly)"
             />
+            {isRecurring && (
+              <FormControl fullWidth>
+                <InputLabel>Due Date (Day of Month)</InputLabel>
+                <Select
+                  value={dueDate}
+                  label="Due Date (Day of Month)"
+                  onChange={(e) => setDueDate(e.target.value as number | '')}
+                >
+                  <MenuItem value="">
+                    <em>Not set</em>
+                  </MenuItem>
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
+                    <MenuItem key={day} value={day}>
+                      {day}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>When is this expense due each month?</FormHelperText>
+              </FormControl>
+            )}
           </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
