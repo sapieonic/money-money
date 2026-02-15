@@ -21,6 +21,7 @@ import { sendTelegramMessage } from '../src/services/telegram';
 dotenv.config();
 
 const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME || 'money-tracker';
 
 if (!MONGODB_URI) {
   console.error('Error: MONGODB_URI environment variable is required');
@@ -59,8 +60,10 @@ async function notifyUsers() {
   console.log('📡 Connecting to MongoDB...');
 
   try {
-    await mongoose.connect(MONGODB_URI);
-    console.log('✅ Connected to MongoDB');
+    await mongoose.connect(MONGODB_URI as string, {
+      dbName: MONGODB_DB_NAME,
+    });
+    console.log(`✅ Connected to MongoDB (${MONGODB_DB_NAME})`);
 
     // Find all users with Telegram linked
     const users = await User.find({
