@@ -138,7 +138,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     // Actual days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const status = getDayStatus(day);
-      const { dailyTotal, recurringTotal, total } = getTotalForDay(day);
+      const { dailyTotal, recurringTotal } = getTotalForDay(day);
       const expenses = getExpensesForDay(day);
       const recurringExpensesForDay = getRecurringExpensesForDay(day);
       const hasExpenses = expenses.length > 0 || recurringExpensesForDay.length > 0;
@@ -238,10 +238,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const monthName = new Date(year, monthNum - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
-
-  // Calculate total expenses for the month
-  const totalDailyExpenses = dailyExpenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const totalRecurringDue = recurringExpenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   return (
     <Box>
