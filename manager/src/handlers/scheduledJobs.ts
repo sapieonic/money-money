@@ -13,7 +13,9 @@ import {
   generateWeeklyExpenseEmailText,
 } from '../services/email';
 import { generateDailyNarrative } from '../services/llm/dailyNarrative';
+import { generateExpenseReminderMessage } from '../services/llm/expenseReminder';
 import { sendTelegramMessage } from '../services/telegram';
+import { Expense } from '../models/Expense';
 import { startRequestSpan, checkColdStart, recordError, flush, logger } from '../utils/telemetry';
 
 /**
@@ -199,6 +201,144 @@ export const sendDailyTelegramDigests = async (
         logger.error('Daily Telegram digest job failed', { error: String(err) });
         if (err instanceof Error) {
           recordError(err, { 'scheduled.error': 'daily_telegram_digest_failed' });
+        }
+        return {
+          success: false,
+          processed: 0,
+          sent: 0,
+          skipped: 0,
+          errors: 1,
+        };
+      }
+    }
+  );
+
+  try {
+    await flush();
+  } catch (e) {
+    console.error('Telemetry flush error:', e);
+  }
+  return result;
+};
+
+/**
+ * Send daily expense reminders via Telegram to users with expenses due tomorrow
+ * Triggered every day at 6:45 PM IST (13:15 UTC)
+ */
+export const sendDailyExpenseReminders = async (
+  event: ScheduledEvent,
+  context: Context
+): Promise<{ success: boolean; processed: number; sent: number; skipped: number; errors: number }> => {
+  const result = await startRequestSpan(
+    'scheduled.dailyExpenseReminder',
+    {
+      'faas.trigger': 'timer',
+      'scheduled.job': 'daily_expense_reminder',
+    },
+    async () => {
+      checkColdStart();
+      logger.info('Starting daily expense reminder job');
+
+      try {
+        await connectToDatabase();
+
+        // Calculate tomorrow's date
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowDay = tomorrow.getDate(); // Day of month (1-31)
+        const tomorrowDateString = tomorrow.toLocaleDateString('en-IN', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        });
+        const tomorrowDayName = tomorrow.toLocaleDateString('en-IN', { weekday: 'long' });
+
+        // Find all users with linked Telegram accounts
+        const users = await User.find({
+          telegramChatId: { $exists: true, $ne: null },
+        });
+
+        logger.info('Found users with Telegram linked', {
+          count: users.length,
+          tomorrowDay,
+        });
+
+        let sent = 0;
+        let skipped = 0;
+        let errors = 0;
+
+        for (const user of users) {
+          try {
+            // Find expenses due tomorrow for this user
+            const expenses = await Expense.find({
+              userId: user.firebaseUid,
+              isRecurring: true,
+              isActive: true,
+              dueDate: tomorrowDay,
+            });
+
+            // Skip if no expenses due tomorrow
+            if (expenses.length === 0) {
+              skipped++;
+              logger.info('Skipping user - no expenses due tomorrow', {
+                userId: user.firebaseUid,
+              });
+              continue;
+            }
+
+            // Prepare expense data for message generation
+            const expenseData = expenses.map((expense) => ({
+              name: expense.name,
+              amount: expense.amount,
+              category: expense.category,
+            }));
+
+            const totalAmount = expenses.reduce((sum, expense) => sum + expense.amount, 0);
+
+            // Generate AI reminder message
+            const message = await generateExpenseReminderMessage({
+              userName: user.name,
+              tomorrowDate: tomorrowDateString,
+              dayName: tomorrowDayName,
+              expenses: expenseData,
+              totalAmount,
+            });
+
+            // Send via Telegram
+            const messageSent = await sendTelegramMessage(user.telegramChatId!, message);
+
+            if (messageSent) {
+              sent++;
+              logger.info('Sent expense reminder', {
+                userId: user.firebaseUid,
+                expenseCount: expenses.length,
+              });
+            } else {
+              errors++;
+              logger.error('Failed to send expense reminder', { userId: user.firebaseUid });
+            }
+          } catch (err) {
+            errors++;
+            logger.error('Error processing user for expense reminder', {
+              userId: user.firebaseUid,
+              error: String(err),
+            });
+          }
+        }
+
+        logger.info('Daily expense reminder job complete', { sent, skipped, errors });
+
+        return {
+          success: true,
+          processed: users.length,
+          sent,
+          skipped,
+          errors,
+        };
+      } catch (err) {
+        logger.error('Daily expense reminder job failed', { error: String(err) });
+        if (err instanceof Error) {
+          recordError(err, { 'scheduled.error': 'daily_expense_reminder_failed' });
         }
         return {
           success: false,

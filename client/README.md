@@ -89,14 +89,20 @@ src/
 │   ├── common/          # Shared components (Navbar, Sidebar, etc.)
 │   ├── income/          # Income-related components
 │   ├── expenses/        # Expense-related components
+│   ├── daily-expenses/  # Daily expense components
 │   ├── investments/     # Investment-related components
-│   └── assets/          # Asset-related components
+│   ├── assets/          # Asset-related components
+│   └── monthly-tracker/ # Monthly tracker components
+│       ├── LedgerSection.tsx   # Ledger list view
+│       └── CalendarView.tsx    # Calendar view with expenses
 ├── pages/               # Page components
 │   ├── Dashboard.tsx    # Main dashboard with summary
 │   ├── Income.tsx       # Income management
-│   ├── Expenses.tsx     # Expense management
+│   ├── Expenses.tsx     # Recurring expense management
+│   ├── DailySpending.tsx # Daily expense tracking
 │   ├── Investments.tsx  # SIPs and voluntary investments
 │   ├── Assets.tsx       # Asset portfolio management
+│   ├── MonthlyTracker.tsx # Monthly ledger with calendar/detailed views
 │   ├── Settings.tsx     # User settings
 │   └── Login.tsx        # Authentication page
 ├── services/            # API service modules
@@ -137,6 +143,8 @@ src/
 - Add, edit, and delete expenses
 - Categorize by type (housing, transport, utilities, subscriptions, loan, other)
 - Mark expenses as recurring or one-time
+- Set due dates (day of month) for recurring expenses
+- View due dates in expense list with ordinal formatting (1st, 2nd, 3rd, etc.)
 
 ### Investment Management
 - Manage SIPs (Systematic Investment Plans)
@@ -150,9 +158,26 @@ src/
 - Value history tracking with charts
 - Mark assets as sold
 
+### Monthly Tracker
+- **Dual View Modes**: Toggle between Calendar and Detailed views
+- **Calendar View**:
+  - Visual month calendar showing all days
+  - Daily expense totals displayed on each day
+  - Recurring expense due dates shown with warning chips
+  - Color-coded day status (past days faded, current day highlighted, upcoming days normal)
+  - Month navigation with arrows
+  - Hover tooltips showing expense details
+  - Summary info showing transaction counts
+- **Detailed View**:
+  - Traditional list view with collapsible sections
+  - Income sources, expenses, investments, and daily expenses
+  - Full CRUD operations for ledger items
+
 ### Settings
 - Configure USD/INR exchange rate
 - View profile information
+- Link/unlink Telegram account for expense tracking
+- Manage email notification preferences
 
 ## Responsive Design
 

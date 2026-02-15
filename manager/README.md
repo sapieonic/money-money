@@ -86,29 +86,36 @@ npm run deploy:prod
 src/
 ├── handlers/            # Lambda function handlers
 │   ├── income.ts        # Income CRUD operations
-│   ├── expenses.ts      # Expense CRUD operations
+│   ├── expenses.ts      # Expense CRUD operations (supports dueDate)
 │   ├── investments.ts   # Investment CRUD + status toggle
 │   ├── assets.ts        # Asset CRUD + value updates
 │   ├── dailyExpenses.ts # Daily expense tracking
+│   ├── monthlyLedger.ts # Monthly ledger management
 │   ├── dashboard.ts     # Dashboard aggregation + snapshots
 │   ├── settings.ts      # User settings management
 │   ├── telegram.ts      # Telegram bot webhook
-│   └── scheduledJobs.ts # Cron jobs (weekly summaries)
+│   └── scheduledJobs.ts # Cron jobs (expense reminders, digests, weekly summaries)
 ├── models/              # Mongoose schemas
-│   ├── User.ts          # User model with settings
+│   ├── User.ts          # User model with settings & Telegram
 │   ├── Income.ts        # Income source model
-│   ├── Expense.ts       # Expense model
+│   ├── Expense.ts       # Expense model (with optional dueDate)
 │   ├── DailyExpense.ts  # Daily expense model
 │   ├── Investment.ts    # Investment model (SIP/voluntary)
 │   ├── Asset.ts         # Asset model with value history
+│   ├── MonthlyLedger.ts # Monthly ledger model
 │   └── Snapshot.ts      # Monthly snapshot model
 ├── middleware/          # Express-style middleware
 │   └── auth.ts          # Firebase token verification + telemetry
 ├── services/            # External service integrations
 │   ├── telegram.ts      # Telegram Bot API utilities
-│   ├── analytics.ts     # Weekly analytics generation
+│   ├── analytics/       # Analytics generation services
 │   ├── email/           # Email providers (Mailjet)
 │   └── llm/             # LLM providers (Azure OpenAI)
+│       ├── dailyNarrative.ts    # Daily expense digest AI
+│       ├── expenseReminder.ts   # Expense reminder AI
+│       └── providers/   # Provider implementations
+├── scripts/             # Utility scripts
+│   └── notify-missing-due-dates.ts  # Notify users to set due dates
 ├── utils/               # Utility modules
 │   ├── db.ts            # MongoDB connection with caching
 │   ├── response.ts      # API response helpers
@@ -162,9 +169,12 @@ Authorization: Bearer <firebase-id-token>
   "amount": 34000,
   "category": "housing",
   "isRecurring": true,
+  "dueDate": 1,
   "currency": "INR"
 }
 ```
+
+**Note:** `dueDate` is optional and represents the day of month (1-31) when the expense is due. Used for automated reminders.
 
 ### Investments
 
@@ -293,6 +303,54 @@ Authorization: Bearer <firebase-id-token>
 - `active` - Currently active
 - `paused` - Temporarily paused
 - `stopped` - Permanently stopped
+
+## Scheduled Jobs
+
+The API includes several automated scheduled jobs triggered by AWS CloudWatch Events:
+
+### Daily Expense Reminders
+- **Schedule**: Every day at 13:15 UTC (6:45 PM IST)
+- **Handler**: `src/handlers/scheduledJobs.sendDailyExpenseReminders`
+- **Function**: Sends Telegram reminders to users about recurring expenses due tomorrow
+- **Requirements**: Users must have Telegram linked and expenses with `dueDate` set
+
+### Daily Telegram Digests
+- **Schedule**: Every day at 16:00 UTC (9:30 PM IST)
+- **Handler**: `src/handlers/scheduledJobs.sendDailyTelegramDigests`
+- **Function**: Sends AI-powered daily expense summaries via Telegram
+- **Requirements**: Users must have Telegram linked and daily expenses for that day
+
+### Weekly Email Summaries
+- **Schedule**: Every Monday at 03:30 UTC (9:00 AM IST)
+- **Handler**: `src/handlers/scheduledJobs.sendWeeklyExpenseSummaries`
+- **Function**: Sends comprehensive weekly expense summaries via email
+- **Requirements**: Users must opt-in via Settings and have expenses during the week
+
+### Testing Scheduled Jobs Locally
+
+```bash
+# Test expense reminder job
+serverless invoke local -f dailyExpenseReminder
+
+# Test daily digest job
+serverless invoke local -f dailyTelegramDigest
+
+# Test weekly email summary job
+serverless invoke local -f weeklyExpenseSummary
+```
+
+## Utility Scripts
+
+### Notify Users About Missing Due Dates
+
+One-time script to notify Telegram-linked users about recurring expenses that don't have due dates set:
+
+```bash
+cd manager
+npx ts-node scripts/notify-missing-due-dates.ts
+```
+
+This sends a friendly message encouraging users to set due dates for better expense tracking.
 
 ## Scripts
 

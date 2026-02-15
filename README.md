@@ -13,6 +13,8 @@ A full-stack personal finance management application to track income, expenses, 
 ### Expense Tracking
 - Categorize expenses (housing, transport, utilities, subscriptions, loans, etc.)
 - Recurring vs one-time expense tracking
+- **Due date tracking** - Set payment due dates (day of month) for recurring expenses
+- **Automated reminders** - Daily Telegram notifications at 6:45 PM IST for expenses due tomorrow
 - Monthly expense summaries
 
 ### Daily Expense Tracking
@@ -66,6 +68,9 @@ A full-stack personal finance management application to track income, expenses, 
 - Summary cards: Total Income, Expenses, SIPs, Investments, Daily Expenses, Remaining
 - Month picker to navigate between months
 - **Dashboard integration** — dashboard summary automatically uses ledger data for the current month when available
+- **Dual View Modes**:
+  - **Calendar View** - Visual month calendar showing daily expenses and recurring payment due dates with color-coded day status (past/current/upcoming)
+  - **Detailed View** - Traditional list view with all ledger sections for detailed management
 
 ### Dashboard
 - Visual allocation breakdown with donut chart
@@ -91,7 +96,11 @@ A full-stack personal finance management application to track income, expenses, 
 - **Firebase Admin SDK** for token verification
 - **LLM Integration** - Pluggable LLM providers (Azure OpenAI, with factory pattern for extensibility)
 - **Email Service** - Pluggable email providers (Mailjet, with factory pattern for extensibility)
-- **Scheduled Jobs** - CloudWatch Events for automated tasks (weekly email summaries)
+- **Telegram Bot** - Expense tracking and automated reminders via Telegram
+- **Scheduled Jobs** - CloudWatch Events for automated tasks:
+  - Daily expense reminders (6:45 PM IST)
+  - Daily AI expense digests (9:30 PM IST)
+  - Weekly email summaries (Mondays at 9 AM IST)
 
 ## Project Structure
 
@@ -107,6 +116,8 @@ money-money/
 │   │   │   ├── investments/   # Investment-related components
 │   │   │   ├── assets/        # Asset-related components
 │   │   │   └── monthly-tracker/ # Monthly tracker components
+│   │   │       ├── LedgerSection.tsx   # Ledger list view
+│   │   │       └── CalendarView.tsx    # Calendar view with expenses
 │   │   ├── pages/             # Page components
 │   │   ├── services/          # API service functions
 │   │   ├── context/           # React context (Auth)
@@ -124,6 +135,8 @@ money-money/
 │   │   │   ├── llm/           # LLM provider implementations
 │   │   │   │   ├── types.ts   # LLM interfaces and types
 │   │   │   │   ├── factory.ts # Provider factory
+│   │   │   │   ├── dailyNarrative.ts    # Daily expense digest AI
+│   │   │   │   ├── expenseReminder.ts   # Expense reminder AI
 │   │   │   │   └── providers/ # Provider implementations
 │   │   │   ├── email/         # Email provider implementations
 │   │   │   │   ├── types.ts   # Email interfaces
@@ -132,6 +145,8 @@ money-money/
 │   │   │   │   └── templates/ # Email templates
 │   │   │   └── analytics/     # Analytics services
 │   │   │       └── weeklyExpenseAnalytics.ts
+│   │   ├── scripts/           # Utility scripts
+│   │   │   └── notify-missing-due-dates.ts  # One-time notification script
 │   │   ├── middleware/        # Auth middleware
 │   │   ├── utils/             # Database & response utilities
 │   │   └── types/             # TypeScript interfaces
@@ -258,8 +273,8 @@ npm run build
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/expenses` | Get all expenses |
-| POST | `/api/expenses` | Create expense |
-| PUT | `/api/expenses/{id}` | Update expense |
+| POST | `/api/expenses` | Create expense (supports optional `dueDate` field: 1-31) |
+| PUT | `/api/expenses/{id}` | Update expense (supports optional `dueDate` field: 1-31) |
 | DELETE | `/api/expenses/{id}` | Delete expense |
 
 ### Daily Expenses
@@ -481,6 +496,69 @@ The AI parser can intelligently extract information from various formats:
 - `Paid Rupees 100 to Apollo Pharmacy` → Health, Apollo Pharmacy
 
 The LLM understands context and can categorize expenses accurately even with varied message formats.
+
+### Recurring Expense Reminders
+
+Never miss a payment deadline with automated daily reminders for recurring expenses.
+
+#### Features
+- **Due date tracking** - Set specific day of month (1-31) for each recurring expense
+- **Daily notifications** - Automated Telegram messages at 6:45 PM IST for expenses due tomorrow
+- **AI-powered messages** - Friendly, context-aware reminders using Azure OpenAI
+- **Grouped notifications** - All expenses due on the same day sent in a single message
+- **Category breakdown** - Expenses grouped by category for easy review
+- **Calendar integration** - Due dates visible in Monthly Tracker calendar view
+
+#### How It Works
+
+1. **Set Due Dates**
+   - Edit any recurring expense in the Expenses page
+   - Set the "Due Date (Day of Month)" field (e.g., 1st, 15th, 28th)
+   - Save the expense
+
+2. **Receive Reminders**
+   - Every day at 6:45 PM IST, the system checks for expenses due tomorrow
+   - If you have expenses due, you'll receive a Telegram message
+   - Message includes expense names, amounts, and categories
+   - Total amount due is prominently displayed
+
+3. **Example Message**
+   ```
+   Hey Manas! 👋
+
+   💰 Expenses Due Tomorrow (Monday, Feb 17)
+
+   You have 3 recurring expenses due:
+
+   🏠 Housing
+   • House Rent: ₹25,000
+
+   🔌 Utilities
+   • Electricity Bill: ₹2,500
+   • Internet: ₹1,000
+
+   Total: ₹28,500
+
+   💡 Tip: Set up auto-pay for recurring bills to never miss a deadline!
+   ```
+
+#### Configuration
+
+Expense reminders work automatically if you have:
+- Telegram account linked (see Telegram Bot Integration above)
+- Azure OpenAI configured (optional - falls back to template-based messages)
+- Recurring expenses with due dates set
+
+#### One-Time Notification Script
+
+For existing users, run this script to notify about expenses missing due dates:
+
+```bash
+cd manager
+npx ts-node scripts/notify-missing-due-dates.ts
+```
+
+This sends a one-time message to all Telegram-linked users who have recurring expenses without due dates, encouraging them to set them.
 
 ### Weekly Email Summaries
 

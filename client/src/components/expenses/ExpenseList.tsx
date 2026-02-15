@@ -20,6 +20,21 @@ interface ExpenseListProps {
   onDelete: (expense: Expense) => void;
 }
 
+/**
+ * Format day of month with ordinal suffix (1st, 2nd, 3rd, etc.)
+ */
+const formatDayOfMonth = (day: number): string => {
+  const suffix =
+    day === 1 || day === 21 || day === 31
+      ? 'st'
+      : day === 2 || day === 22
+        ? 'nd'
+        : day === 3 || day === 23
+          ? 'rd'
+          : 'th';
+  return `${day}${suffix}`;
+};
+
 const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDelete }) => {
   if (expenses.length === 0) {
     return (
@@ -77,6 +92,14 @@ const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDelete })
                   />
                   {expense.isRecurring && (
                     <Chip label="Monthly" size="small" color="info" variant="outlined" />
+                  )}
+                  {expense.isRecurring && expense.dueDate && (
+                    <Chip
+                      label={`Due: ${formatDayOfMonth(expense.dueDate)}`}
+                      size="small"
+                      color="warning"
+                      variant="outlined"
+                    />
                   )}
                 </Box>
               }

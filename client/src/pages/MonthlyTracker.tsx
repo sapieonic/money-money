@@ -6,6 +6,9 @@ import {
   CircularProgress,
   Alert,
   Grid,
+  Tabs,
+  Tab,
+  Paper,
 } from '@mui/material';
 import {
   AccountBalance,
@@ -14,9 +17,12 @@ import {
   Savings,
   AttachMoney,
   ShoppingCart,
+  CalendarMonth,
+  ViewList,
 } from '@mui/icons-material';
 import SummaryCard from '../components/common/SummaryCard';
 import LedgerSection from '../components/monthly-tracker/LedgerSection';
+import CalendarView from '../components/monthly-tracker/CalendarView';
 import IncomeForm from '../components/income/IncomeForm';
 import RSUVestingForm from '../components/income/RSUVestingForm';
 import ExpenseForm from '../components/expenses/ExpenseForm';
@@ -25,6 +31,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import { monthlyLedgerService } from '../services/monthlyLedgerService';
 import { dailyExpenseService } from '../services/dailyExpenseService';
 import { settingsService } from '../services/settingsService';
+import { expenseService } from '../services/expenseService';
 import type {
   MonthlyLedger,
   LedgerSection as LedgerSectionType,
@@ -65,10 +72,12 @@ const MonthlyTracker: React.FC = () => {
   const [ledger, setLedger] = useState<MonthlyLedger | null>(null);
   const [dailyExpensesTotal, setDailyExpensesTotal] = useState(0);
   const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
+  const [recurringExpenses, setRecurringExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(89);
+  const [activeTab, setActiveTab] = useState<'calendar' | 'detailed'>('calendar');
 
   // Form state
   const [incomeFormOpen, setIncomeFormOpen] = useState(false);
@@ -97,14 +106,21 @@ const MonthlyTracker: React.FC = () => {
       const startDate = `${month}-01`;
       const endDate = `${month}-${String(lastDay).padStart(2, '0')}`;
 
-      const [ledgerResult, dailyExpensesResult] = await Promise.all([
+      const [ledgerResult, dailyExpensesResult, recurringExpensesResult] = await Promise.all([
         monthlyLedgerService.getOrCreate(month),
         dailyExpenseService.getAll({ startDate, endDate, limit: 200 }),
+        expenseService.getAll(),
       ]);
 
       setLedger(ledgerResult.ledger);
       setDailyExpensesTotal(ledgerResult.dailyExpensesTotal);
       setDailyExpenses(dailyExpensesResult.items);
+      // Filter for active recurring expenses with due dates
+      setRecurringExpenses(
+        recurringExpensesResult.filter(
+          (exp) => exp.isRecurring && exp.isActive && exp.dueDate !== undefined
+        )
+      );
       setError(null);
     } catch (err) {
       setError('Failed to load monthly ledger');
@@ -341,8 +357,40 @@ const MonthlyTracker: React.FC = () => {
         </Grid>
       </Grid>
 
-      {/* Ledger Sections */}
-      {ledger && (
+      {/* Tabs */}
+      <Paper sx={{ mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(_, newValue) => setActiveTab(newValue)}
+          sx={{ borderBottom: 1, borderColor: 'divider' }}
+        >
+          <Tab
+            icon={<CalendarMonth />}
+            iconPosition="start"
+            label="Calendar View"
+            value="calendar"
+          />
+          <Tab
+            icon={<ViewList />}
+            iconPosition="start"
+            label="Detailed View"
+            value="detailed"
+          />
+        </Tabs>
+      </Paper>
+
+      {/* Calendar View */}
+      {activeTab === 'calendar' && ledger && (
+        <CalendarView
+          month={month}
+          dailyExpenses={dailyExpenses}
+          recurringExpenses={recurringExpenses}
+          onMonthChange={setMonth}
+        />
+      )}
+
+      {/* Detailed View - Ledger Sections */}
+      {activeTab === 'detailed' && ledger && (
         <>
           <LedgerSection
             title="Income Sources"

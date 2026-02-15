@@ -29,6 +29,14 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       return badRequest('Name and amount are required');
     }
 
+    // Validate dueDate if provided
+    if (body.dueDate !== undefined && body.dueDate !== null) {
+      const dueDate = Number(body.dueDate);
+      if (isNaN(dueDate) || dueDate < 1 || dueDate > 31) {
+        return badRequest('Due date must be a number between 1 and 31');
+      }
+    }
+
     const expense = await Expense.create({
       userId: event.userId,
       name: body.name,
@@ -36,6 +44,7 @@ export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       currency: body.currency || 'INR',
       category: body.category || 'other',
       isRecurring: body.isRecurring !== false,
+      ...(body.dueDate !== undefined && body.dueDate !== null && { dueDate: Number(body.dueDate) }),
       isActive: true,
     });
 
@@ -57,15 +66,34 @@ export const update = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
       return badRequest('Expense ID is required');
     }
 
+    // Validate dueDate if provided
+    if (body.dueDate !== undefined && body.dueDate !== null) {
+      const dueDate = Number(body.dueDate);
+      if (isNaN(dueDate) || dueDate < 1 || dueDate > 31) {
+        return badRequest('Due date must be a number between 1 and 31');
+      }
+    }
+
+    const updateFields: any = {
+      ...(body.name && { name: body.name }),
+      ...(body.amount !== undefined && { amount: body.amount }),
+      ...(body.currency && { currency: body.currency }),
+      ...(body.category && { category: body.category }),
+      ...(body.isRecurring !== undefined && { isRecurring: body.isRecurring }),
+    };
+
+    // Handle dueDate: allow setting it or removing it (null/'')
+    if (body.dueDate !== undefined) {
+      if (body.dueDate === null || body.dueDate === '') {
+        updateFields.dueDate = null;
+      } else {
+        updateFields.dueDate = Number(body.dueDate);
+      }
+    }
+
     const expense = await Expense.findOneAndUpdate(
       { _id: id, userId: event.userId },
-      {
-        ...(body.name && { name: body.name }),
-        ...(body.amount !== undefined && { amount: body.amount }),
-        ...(body.currency && { currency: body.currency }),
-        ...(body.category && { category: body.category }),
-        ...(body.isRecurring !== undefined && { isRecurring: body.isRecurring }),
-      },
+      updateFields,
       { new: true }
     );
 

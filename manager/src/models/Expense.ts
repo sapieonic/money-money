@@ -8,6 +8,7 @@ export interface IExpense extends Document {
   currency: string;
   category: ExpenseCategory;
   isRecurring: boolean;
+  dueDate?: number; // Day of month (1-31) when expense is due
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -41,6 +42,12 @@ const expenseSchema = new Schema<IExpense>(
     isRecurring: {
       type: Boolean,
       default: true,
+    },
+    dueDate: {
+      type: Number,
+      required: false,
+      min: 1,
+      max: 31,
     },
     isActive: {
       type: Boolean,
