@@ -34,6 +34,11 @@ export type LedgerStatus = 'draft' | 'finalized';
 
 export type AssetCategory = 'stocks' | 'mutual_fund' | 'crypto' | 'fd' | 'real_estate' | 'rsu' | 'other';
 
+export type DebtStatus = 'active' | 'paid_off' | 'paused';
+export type InterestRateType = 'fixed' | 'variable' | 'reducing' | 'other';
+export type PaymentType = 'scheduled' | 'adhoc';
+export type SnowballStrategy = 'snowball' | 'avalanche';
+
 export interface ValueHistoryEntry {
   date: Date;
   valueINR: number;

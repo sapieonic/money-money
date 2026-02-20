@@ -49,7 +49,7 @@ ${expenseList}
 
 📱 Set them now in Finance Watch → Expenses → Edit each expense
 
-Need help? Reply to this message!`;
+Need help? Contact admin at money-matters@manasranjan.dev !`;
 }
 
 /**

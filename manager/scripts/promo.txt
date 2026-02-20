@@ -1,0 +1,38 @@
+Hey {userName}! 👋
+
+🎉 <b>New Feature: Debt Snowball Calculator</b>
+
+We've added a powerful new tool to help you crush your debts faster! Here's what's new:
+
+💰 <b>Debt Tracking</b>
+• Add and manage all your loans (home, car, personal, etc.)
+• Track principal, balance, interest rate, and EMI for each debt
+• See real-time repayment progress with visual progress bars
+• Support for fixed, reducing, and variable interest rates
+
+📊 <b>Amortization Schedules</b>
+• View month-by-month breakdown of every debt
+• See exactly how much goes to principal vs interest each month
+• Schedules update automatically when you make ad-hoc payments
+
+⚡ <b>Ad-hoc Payments</b>
+• Record lump-sum payments anytime (bonus, tax refund, etc.)
+• Extra payments go directly to principal, saving you interest
+• Full payment history with dates and notes
+
+🎯 <b>Snowball & Avalanche Strategies</b>
+• Snowball: Pay off smallest balances first for quick wins
+• Avalanche: Target highest interest rates first to save money
+• Compare both strategies side-by-side
+• See projected payoff dates and total interest for each approach
+• Track which debt gets paid off first, second, third...
+
+🔗 <b>Smart Expense Linking</b>
+• Debts auto-create a linked recurring expense (EMI) for your budget
+• Or link an existing expense from your Recurring Expenses page
+• Updates to debt EMI automatically sync to the linked expense
+• Paying off a debt deactivates the linked expense
+
+📱 Head to Finance Watch → Debts to get started!
+
+Got questions? Reach out at money-matters@manasranjan.dev

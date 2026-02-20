@@ -20,6 +20,7 @@ import {
   ShoppingCart,
   TrendingUp,
   AccountBalanceWallet,
+  CreditCard,
   CalendarMonth,
   Settings,
 } from '@mui/icons-material';
@@ -60,6 +61,7 @@ const menuGroups: MenuGroup[] = [
       { text: 'Daily Spending', icon: <ShoppingCart />, path: '/daily-expenses', color: '#ff7043' },
       { text: 'Investments', icon: <TrendingUp />, path: '/investments', color: '#2196f3' },
       { text: 'Assets', icon: <AccountBalanceWallet />, path: '/assets', color: '#ff9800' },
+      { text: 'Debts', icon: <CreditCard />, path: '/debts', color: '#e91e63' },
     ],
   },
 ];

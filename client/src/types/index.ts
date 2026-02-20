@@ -108,6 +108,93 @@ export interface Asset {
   updatedAt: string;
 }
 
+// Debt types
+export type DebtStatus = 'active' | 'paid_off' | 'paused';
+export type InterestRateType = 'fixed' | 'variable' | 'reducing' | 'other';
+export type PaymentType = 'scheduled' | 'adhoc';
+export type SnowballStrategy = 'snowball' | 'avalanche';
+
+export interface PaymentHistoryEntry {
+  _id: string;
+  date: string;
+  amount: number;
+  principal: number;
+  interest: number;
+  type: PaymentType;
+  balanceAfter: number;
+  note?: string;
+}
+
+export interface Debt {
+  _id: string;
+  userId: string;
+  name: string;
+  totalAmount: number;
+  currentBalance: number;
+  interestRate: number;
+  interestRateType: InterestRateType;
+  monthlyPayment: number;
+  additionalPayment: number;
+  startDate: string;
+  endDate: string;
+  dueDate?: number;
+  currency: string;
+  status: DebtStatus;
+  linkedExpenseId?: string;
+  paymentHistory: PaymentHistoryEntry[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AmortizationEntry {
+  month: number;
+  payment: number;
+  principal: number;
+  interest: number;
+  balance: number;
+  date: string;
+}
+
+export interface DebtAmortizationResponse {
+  debtId: string;
+  name: string;
+  schedule: AmortizationEntry[];
+  totalInterest: number;
+  totalPaid: number;
+  months: number;
+}
+
+export interface SnowballMonthDebtEntry {
+  id: string;
+  name: string;
+  payment: number;
+  principal: number;
+  interest: number;
+  balance: number;
+}
+
+export interface SnowballMonthEntry {
+  month: number;
+  date: string;
+  debts: SnowballMonthDebtEntry[];
+  totalPayment: number;
+}
+
+export interface SnowballPlanSummary {
+  totalMonths: number;
+  totalInterest: number;
+  totalPaid: number;
+  projectedPayoffDate: string | null;
+  payoffOrder: Array<{ id: string; name: string; month: number; date: string }>;
+}
+
+export interface SnowballPlanResult {
+  strategy: SnowballStrategy;
+  summary: SnowballPlanSummary | null;
+  plan: SnowballMonthEntry[];
+}
+
 export interface ExchangeRates {
   USD: number;
   EUR?: number;
