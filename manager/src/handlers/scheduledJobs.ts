@@ -16,6 +16,7 @@ import { generateDailyNarrative } from '../services/llm/dailyNarrative';
 import { generateExpenseReminderMessage } from '../services/llm/expenseReminder';
 import { sendTelegramMessage } from '../services/telegram';
 import { Expense } from '../models/Expense';
+import { Debt } from '../models/Debt';
 import { startRequestSpan, checkColdStart, recordError, flush, logger } from '../utils/telemetry';
 
 /**
@@ -345,6 +346,128 @@ export const sendDailyExpenseReminders = async (
           processed: 0,
           sent: 0,
           skipped: 0,
+          errors: 1,
+        };
+      }
+    }
+  );
+
+  try {
+    await flush();
+  } catch (e) {
+    console.error('Telemetry flush error:', e);
+  }
+  return result;
+};
+
+/**
+ * Process scheduled debt payments for debts due today
+ * Triggered every day at 6:00 AM IST (00:30 UTC)
+ */
+export const processDebtPayments = async (
+  event: ScheduledEvent,
+  context: Context
+): Promise<{ success: boolean; processed: number; paid: number; paidOff: number; errors: number }> => {
+  const result = await startRequestSpan(
+    'scheduled.processDebtPayments',
+    {
+      'faas.trigger': 'timer',
+      'scheduled.job': 'process_debt_payments',
+    },
+    async () => {
+      checkColdStart();
+      logger.info('Starting debt payment processing job');
+
+      try {
+        await connectToDatabase();
+
+        const today = new Date();
+        const todayDay = today.getDate();
+
+        const debts = await Debt.find({
+          dueDate: todayDay,
+          status: 'active',
+          isActive: true,
+        });
+
+        logger.info('Found debts due today', { count: debts.length, dueDate: todayDay });
+
+        let paid = 0;
+        let paidOff = 0;
+        let errors = 0;
+
+        for (const debt of debts) {
+          try {
+            if (debt.currentBalance <= 0) {
+              debt.status = 'paid_off';
+              await debt.save();
+              paidOff++;
+              continue;
+            }
+
+            // Calculate interest based on rate type
+            const monthlyRate = debt.interestRate / 12 / 100;
+            let interest: number;
+            if (debt.interestRateType === 'fixed') {
+              interest = monthlyRate * debt.totalAmount;
+            } else {
+              interest = monthlyRate * debt.currentBalance;
+            }
+
+            const totalPayment = debt.monthlyPayment + debt.additionalPayment;
+            const payment = Math.min(totalPayment, debt.currentBalance + interest);
+            const principalPaid = payment - interest;
+            const newBalance = Math.max(0, debt.currentBalance - principalPaid);
+
+            debt.paymentHistory.push({
+              date: today,
+              amount: Math.round(payment * 100) / 100,
+              principal: Math.round(principalPaid * 100) / 100,
+              interest: Math.round(interest * 100) / 100,
+              type: 'scheduled',
+              balanceAfter: Math.round(newBalance * 100) / 100,
+            });
+
+            debt.currentBalance = Math.round(newBalance * 100) / 100;
+
+            if (newBalance <= 0) {
+              debt.status = 'paid_off';
+              if (debt.linkedExpenseId) {
+                await Expense.findByIdAndUpdate(debt.linkedExpenseId, { isActive: false });
+              }
+              paidOff++;
+            }
+
+            await debt.save();
+            paid++;
+          } catch (err) {
+            errors++;
+            logger.error('Error processing debt payment', {
+              debtId: debt._id,
+              error: String(err),
+            });
+          }
+        }
+
+        logger.info('Debt payment processing complete', { paid, paidOff, errors });
+
+        return {
+          success: true,
+          processed: debts.length,
+          paid,
+          paidOff,
+          errors,
+        };
+      } catch (err) {
+        logger.error('Debt payment processing job failed', { error: String(err) });
+        if (err instanceof Error) {
+          recordError(err, { 'scheduled.error': 'debt_payment_processing_failed' });
+        }
+        return {
+          success: false,
+          processed: 0,
+          paid: 0,
+          paidOff: 0,
           errors: 1,
         };
       }

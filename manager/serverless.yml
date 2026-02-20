@@ -274,6 +274,63 @@ functions:
           path: /api/assets/{id}
           method: delete
 
+  # Debt endpoints
+  getDebts:
+    handler: src/handlers/debts.getAll
+    events:
+      - httpApi:
+          path: /api/debts
+          method: get
+
+  getSnowballPlan:
+    handler: src/handlers/debts.getSnowballPlan
+    events:
+      - httpApi:
+          path: /api/debts/snowball-plan
+          method: get
+
+  createDebt:
+    handler: src/handlers/debts.create
+    events:
+      - httpApi:
+          path: /api/debts
+          method: post
+
+  updateDebt:
+    handler: src/handlers/debts.update
+    events:
+      - httpApi:
+          path: /api/debts/{id}
+          method: put
+
+  deleteDebt:
+    handler: src/handlers/debts.remove
+    events:
+      - httpApi:
+          path: /api/debts/{id}
+          method: delete
+
+  recordDebtPayment:
+    handler: src/handlers/debts.recordPayment
+    events:
+      - httpApi:
+          path: /api/debts/{id}/payment
+          method: post
+
+  deleteDebtPayment:
+    handler: src/handlers/debts.deletePayment
+    events:
+      - httpApi:
+          path: /api/debts/{id}/payment/{paymentId}
+          method: delete
+
+  getDebtAmortization:
+    handler: src/handlers/debts.getAmortization
+    events:
+      - httpApi:
+          path: /api/debts/{id}/amortization
+          method: get
+
   # Dashboard & Settings
   getDashboard:
     handler: src/handlers/dashboard.get
@@ -359,3 +416,12 @@ functions:
           rate: cron(15 13 * * ? *)  # Every day at 6:45 PM IST (13:15 UTC)
           enabled: true
           description: Send daily expense reminders via Telegram
+
+  processDebtPayments:
+    handler: src/handlers/scheduledJobs.processDebtPayments
+    timeout: 120
+    events:
+      - schedule:
+          rate: rate(4 days)
+          enabled: true
+          description: Process scheduled debt payments every 4 days

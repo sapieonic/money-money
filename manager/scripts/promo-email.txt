@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>New Feature: Debt Snowball Calculator</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 24px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+          <!-- Header -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1976d2, #e91e63); padding: 32px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">Finance Watch</h1>
+              <p style="margin: 8px 0 0; color: rgba(255,255,255,0.9); font-size: 14px;">New Feature Announcement</p>
+            </td>
+          </tr>
+
+          <!-- Greeting -->
+          <tr>
+            <td style="padding: 32px 40px 16px;">
+              <p style="margin: 0; font-size: 16px; color: #333;">Hey {userName}!</p>
+              <h2 style="margin: 12px 0 0; font-size: 22px; color: #1976d2;">Introducing the Debt Snowball Calculator</h2>
+              <p style="margin: 12px 0 0; font-size: 14px; color: #666; line-height: 1.6;">
+                We've added a powerful new tool to help you crush your debts faster. Track every loan, visualize your payoff timeline, and choose the best strategy to become debt-free.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Feature: Debt Tracking -->
+          <tr>
+            <td style="padding: 16px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #e3f2fd; border-radius: 8px; padding: 20px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h3 style="margin: 0 0 8px; font-size: 16px; color: #1565c0;">&#x1F4B0; Debt Tracking</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+                      <li>Add and manage all your loans &mdash; home, car, personal, and more</li>
+                      <li>Track principal, balance, interest rate, and EMI for each debt</li>
+                      <li>See real-time repayment progress with visual progress bars</li>
+                      <li>Support for fixed, reducing, and variable interest rates</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Feature: Amortization -->
+          <tr>
+            <td style="padding: 16px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3e5f5; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h3 style="margin: 0 0 8px; font-size: 16px; color: #7b1fa2;">&#x1F4CA; Amortization Schedules</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+                      <li>View month-by-month breakdown of every debt</li>
+                      <li>See exactly how much goes to principal vs interest each month</li>
+                      <li>Schedules update automatically when you make ad-hoc payments</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Feature: Ad-hoc Payments -->
+          <tr>
+            <td style="padding: 16px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #e8f5e9; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h3 style="margin: 0 0 8px; font-size: 16px; color: #2e7d32;">&#x26A1; Ad-hoc Payments</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+                      <li>Record lump-sum payments anytime &mdash; bonus, tax refund, etc.</li>
+                      <li>Extra payments go directly to principal, saving you interest</li>
+                      <li>Full payment history with dates and notes</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Feature: Snowball & Avalanche -->
+          <tr>
+            <td style="padding: 16px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fff3e0; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h3 style="margin: 0 0 8px; font-size: 16px; color: #e65100;">&#x1F3AF; Snowball &amp; Avalanche Strategies</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+                      <li><strong>Snowball:</strong> Pay off smallest balances first for quick wins</li>
+                      <li><strong>Avalanche:</strong> Target highest interest rates first to save money</li>
+                      <li>Compare both strategies side-by-side</li>
+                      <li>See projected payoff dates and total interest for each approach</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Feature: Expense Linking -->
+          <tr>
+            <td style="padding: 16px 40px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fce4ec; border-radius: 8px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h3 style="margin: 0 0 8px; font-size: 16px; color: #c62828;">&#x1F517; Smart Expense Linking</h3>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #333; line-height: 1.8;">
+                      <li>Debts auto-create a linked recurring expense (EMI) for your budget</li>
+                      <li>Or link an existing expense from your Recurring Expenses page</li>
+                      <li>Updates to debt EMI automatically sync to the linked expense</li>
+                      <li>Paying off a debt deactivates the linked expense</li>
+                    </ul>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- CTA -->
+          <tr>
+            <td style="padding: 32px 40px; text-align: center;">
+              <a href="https://money.manasranjan.dev/debts" style="display: inline-block; background: linear-gradient(135deg, #1976d2, #1565c0); color: #ffffff; font-size: 16px; font-weight: 600; text-decoration: none; padding: 14px 36px; border-radius: 8px;">
+                Try It Now &rarr;
+              </a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #fafafa; padding: 24px 40px; text-align: center; border-top: 1px solid #eee;">
+              <p style="margin: 0; font-size: 12px; color: #999;">
+                Finance Watch &mdash; Your personal finance companion
+              </p>
+              <p style="margin: 8px 0 0; font-size: 12px; color: #999;">
+                Questions? Reach out at <a href="mailto:money-matters@manasranjan.dev" style="color: #1976d2; text-decoration: none;">money-matters@manasranjan.dev</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

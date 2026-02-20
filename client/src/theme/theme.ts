@@ -123,6 +123,12 @@ export const assetCategoryColors: Record<string, string> = {
   other: '#607d8b',
 };
 
+export const debtStatusColors: Record<string, string> = {
+  active: '#2196f3',
+  paid_off: '#4caf50',
+  paused: '#ff9800',
+};
+
 export const dailyExpenseCategoryColors: Record<string, string> = {
   food: '#ff7043',
   groceries: '#66bb6a',
