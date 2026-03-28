@@ -5,6 +5,7 @@
 
 import { ILLMProvider, LLMProviderType } from './types';
 import { AzureOpenAIProvider } from './providers/azure-openai';
+import { DatabricksClaudeProvider } from './providers/databricks-claude';
 import { FallbackProvider } from './providers/fallback';
 import { logger } from '../../utils/telemetry';
 
@@ -18,7 +19,7 @@ function getConfiguredProviderType(): LLMProviderType {
   // Check for explicit provider setting
   const explicitProvider = process.env.LLM_PROVIDER?.toLowerCase();
   if (explicitProvider) {
-    if (['azure-openai', 'openai', 'anthropic', 'none'].includes(explicitProvider)) {
+    if (['azure-openai', 'databricks-claude', 'openai', 'anthropic', 'none'].includes(explicitProvider)) {
       return explicitProvider as LLMProviderType;
     }
   }
@@ -26,6 +27,10 @@ function getConfiguredProviderType(): LLMProviderType {
   // Auto-detect based on available credentials
   if (process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT) {
     return 'azure-openai';
+  }
+
+  if (process.env.DATABRICKS_HOST && process.env.DATABRICKS_TOKEN) {
+    return 'databricks-claude';
   }
 
   // Add more auto-detection for future providers here
@@ -46,6 +51,9 @@ function createProvider(type: LLMProviderType): ILLMProvider {
   switch (type) {
     case 'azure-openai':
       return new AzureOpenAIProvider();
+
+    case 'databricks-claude':
+      return new DatabricksClaudeProvider();
 
     // Add more providers here as they are implemented
     // case 'openai':

@@ -20,6 +20,10 @@ provider:
     AZURE_OPENAI_ENDPOINT: ${env:AZURE_OPENAI_ENDPOINT, ''}
     AZURE_OPENAI_DEPLOYMENT: ${env:AZURE_OPENAI_DEPLOYMENT, ''}
     AZURE_OPENAI_API_VERSION: ${env:AZURE_OPENAI_API_VERSION, '2024-02-15-preview'}
+    # Databricks Claude Configuration
+    DATABRICKS_HOST: ${env:DATABRICKS_HOST, ''}
+    DATABRICKS_TOKEN: ${env:DATABRICKS_TOKEN, ''}
+    DATABRICKS_SERVING_ENDPOINT: ${env:DATABRICKS_SERVING_ENDPOINT, 'databricks-claude-sonnet-4-6'}
     # Email Configuration (Mailjet)
     EMAIL_PROVIDER: ${env:EMAIL_PROVIDER, ''}
     MAILJET_API_KEY: ${env:MAILJET_API_KEY, ''}
