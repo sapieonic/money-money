@@ -50,7 +50,7 @@ export interface ILLMProvider {
 /**
  * Supported LLM provider types
  */
-export type LLMProviderType = 'azure-openai' | 'openai' | 'anthropic' | 'none';
+export type LLMProviderType = 'azure-openai' | 'databricks-claude' | 'openai' | 'anthropic' | 'none';
 
 /**
  * System prompt for expense parsing

@@ -37,6 +37,19 @@ A full-stack personal finance management application to track income, expenses, 
 - Asset value history tracking
 - RSU-specific tracking with units and unit price
 
+### Debt Snowball Calculator
+- Track all loans — home, car, personal, credit card, etc.
+- **Interest rate types** — fixed, reducing balance, variable
+- **Amortization schedules** — on-demand month-by-month breakdown (principal, interest, balance)
+- **Ad-hoc payments** — record lump-sum payments that go directly to principal
+- **Payment history** — full audit trail with add and delete support; deleting a payment reverses the balance
+- **Snowball & Avalanche strategies** — compare payoff plans side-by-side
+  - Snowball: smallest balance first for quick wins
+  - Avalanche: highest interest rate first to minimise total interest
+  - Projected payoff dates, total interest, and debt payoff order
+- **Smart expense linking** — auto-creates a linked recurring `loan` expense on debt creation, or link an existing expense
+- **Scheduled payment processing** — runs every 4 days to apply EMI payments automatically
+
 ### Telegram Bot Integration
 - **AI-powered expense parsing** using LLM (Azure OpenAI, with extensible architecture)
 - **Automatic expense tracking** via forwarded bank SMS messages
@@ -101,6 +114,7 @@ A full-stack personal finance management application to track income, expenses, 
   - Daily expense reminders (6:45 PM IST)
   - Daily AI expense digests (9:30 PM IST)
   - Weekly email summaries (Mondays at 9 AM IST)
+  - Debt payment processing (every 4 days)
 
 ## Project Structure
 
@@ -115,6 +129,12 @@ money-money/
 │   │   │   ├── daily-expenses/# Daily expense components
 │   │   │   ├── investments/   # Investment-related components
 │   │   │   ├── assets/        # Asset-related components
+│   │   │   ├── debts/         # Debt management components
+│   │   │   │   ├── DebtForm.tsx          # Add/Edit debt dialog
+│   │   │   │   ├── DebtTable.tsx         # Debt list with progress bars
+│   │   │   │   ├── DebtDetailModal.tsx   # Detail view with amortization & history
+│   │   │   │   ├── AdhocPaymentForm.tsx  # Record ad-hoc payment dialog
+│   │   │   │   └── SnowballPlanView.tsx  # Strategy comparison view
 │   │   │   └── monthly-tracker/ # Monthly tracker components
 │   │   │       ├── LedgerSection.tsx   # Ledger list view
 │   │   │       └── CalendarView.tsx    # Calendar view with expenses
@@ -146,7 +166,10 @@ money-money/
 │   │   │   └── analytics/     # Analytics services
 │   │   │       └── weeklyExpenseAnalytics.ts
 │   │   ├── scripts/           # Utility scripts
-│   │   │   └── notify-missing-due-dates.ts  # One-time notification script
+│   │   │   ├── notify-missing-due-dates.ts  # One-time notification script
+│   │   │   ├── send-feature-promo.ts        # Feature promo via Telegram & Email
+│   │   │   ├── promo.txt                    # Telegram promo template
+│   │   │   └── promo-email.txt              # HTML email promo template
 │   │   ├── middleware/        # Auth middleware
 │   │   ├── utils/             # Database & response utilities
 │   │   └── types/             # TypeScript interfaces
@@ -179,13 +202,20 @@ FIREBASE_PROJECT_ID=your-firebase-project-id
 TELEGRAM_BOT_TOKEN=your-telegram-bot-token
 
 # LLM Configuration (Optional - for AI-powered parsing)
-LLM_PROVIDER=azure-openai  # or leave empty for regex fallback
+# Supported: azure-openai, databricks-claude, none
+# Auto-detects from available credentials if not set
+LLM_PROVIDER=azure-openai
 
 # Azure OpenAI (Required if LLM_PROVIDER=azure-openai)
 AZURE_OPENAI_API_KEY=your-azure-openai-api-key
 AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com
 AZURE_OPENAI_DEPLOYMENT=your-deployment-name
 AZURE_OPENAI_API_VERSION=2024-02-15-preview
+
+# Databricks Claude (Required if LLM_PROVIDER=databricks-claude)
+DATABRICKS_HOST=https://adb-xxxxxxx.x.azuredatabricks.net
+DATABRICKS_TOKEN=your-databricks-personal-access-token
+DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-6  # optional
 
 # Email Configuration (Optional - for weekly summaries)
 EMAIL_PROVIDER=mailjet  # or leave empty for console logging
@@ -314,6 +344,18 @@ npm run build
 | PATCH | `/api/assets/{id}/value` | Update asset value |
 | DELETE | `/api/assets/{id}` | Delete asset |
 
+### Debts
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/debts` | Get all debts (optional `?status=active\|paid_off\|paused` filter) |
+| GET | `/api/debts/snowball-plan` | Compute snowball/avalanche projection (`?strategy=snowball\|avalanche`) |
+| POST | `/api/debts` | Create debt (auto-creates linked expense, or pass `linkedExpenseId`) |
+| PUT | `/api/debts/{id}` | Update debt (syncs linked expense) |
+| DELETE | `/api/debts/{id}` | Soft-delete debt (deactivates linked expense) |
+| POST | `/api/debts/{id}/payment` | Record ad-hoc payment (principal only) |
+| DELETE | `/api/debts/{id}/payment/{paymentId}` | Delete a recorded payment (reverses balance) |
+| GET | `/api/debts/{id}/amortization` | Compute full amortization schedule |
+
 ### Dashboard & Settings
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -380,6 +422,7 @@ The system uses a pluggable LLM architecture for intelligent expense parsing:
 | Provider | Status | Configuration |
 |----------|--------|---------------|
 | Azure OpenAI | Implemented | `AZURE_OPENAI_*` env vars |
+| Databricks Claude | Implemented | `DATABRICKS_HOST`, `DATABRICKS_TOKEN`, `DATABRICKS_SERVING_ENDPOINT` env vars |
 | OpenAI | Planned | - |
 | Anthropic | Planned | - |
 | Fallback (Regex) | Default | No config needed |
@@ -388,7 +431,8 @@ The system uses a pluggable LLM architecture for intelligent expense parsing:
 The system auto-detects the provider based on available credentials:
 1. If `LLM_PROVIDER` is set explicitly, uses that provider
 2. If `AZURE_OPENAI_API_KEY` and `AZURE_OPENAI_ENDPOINT` are set, uses Azure OpenAI
-3. Falls back to regex-based parsing if no LLM is configured
+3. If `DATABRICKS_HOST` and `DATABRICKS_TOKEN` are set, uses Databricks Claude
+4. Falls back to regex-based parsing if no LLM is configured
 
 #### Adding New Providers
 To add a new LLM provider:
@@ -488,6 +532,25 @@ The Telegram bot allows you to track expenses on-the-go by simply forwarding ban
    AZURE_OPENAI_API_VERSION=2024-02-15-preview
    ```
 
+#### Databricks Claude Setup
+
+1. **Get Databricks Workspace URL**
+   - Navigate to your Azure Databricks workspace
+   - Copy the workspace URL (e.g., `https://adb-xxxxxxx.x.azuredatabricks.net`)
+
+2. **Generate Personal Access Token**
+   - In Databricks, go to User Settings → Developer → Access Tokens
+   - Generate a new token and copy it
+
+3. **Configure Environment**
+   ```env
+   DATABRICKS_HOST=https://adb-xxxxxxx.x.azuredatabricks.net
+   DATABRICKS_TOKEN=your-personal-access-token
+   DATABRICKS_SERVING_ENDPOINT=databricks-claude-sonnet-4-6  # optional, this is the default
+   ```
+
+   > **Note:** Claude models on Databricks use `json_schema` structured outputs (not `json_object`). The provider handles this automatically.
+
 #### Supported SMS Formats
 The AI parser can intelligently extract information from various formats:
 - `Rs.500 debited at Amazon` → Shopping, Amazon
@@ -559,6 +622,55 @@ npx ts-node scripts/notify-missing-due-dates.ts
 ```
 
 This sends a one-time message to all Telegram-linked users who have recurring expenses without due dates, encouraging them to set them.
+
+### Debt Snowball Calculator
+
+Track and manage all your debts with smart payoff strategies to become debt-free faster.
+
+#### Features
+- **Full debt lifecycle** - Add, edit, delete debts with soft-delete support
+- **Interest rate types** - Fixed (flat), reducing balance, variable, other
+- **Amortization schedules** - Computed on-demand from current state; always up-to-date
+- **Ad-hoc payments** - Record lump-sum payments (bonus, tax refund) that go directly to principal
+- **Payment deletion** - Remove incorrect payments; balance is automatically reversed
+- **Snowball strategy** - Pay off smallest balances first for motivational quick wins
+- **Avalanche strategy** - Target highest interest rates first to minimise total interest paid
+- **Strategy comparison** - Summary cards (total interest, months to payoff, projected date), payoff order timeline, collapsible monthly breakdown
+- **Smart expense linking** - Auto-creates a linked recurring `loan` expense, or link an existing expense
+- **Scheduled processing** - Automated EMI application every 4 days
+
+#### How It Works
+
+1. **Add a Debt**
+   - Go to Debts page → "Add Debt"
+   - Enter loan details: name, principal, balance, interest rate, EMI, dates
+   - Optionally link an existing expense or let the system create one automatically
+
+2. **Track Progress**
+   - View all debts in the table with progress bars and status chips
+   - Click a debt to see summary, amortization schedule, and full payment history
+
+3. **Record Payments**
+   - Click "Record Payment" in the debt detail view
+   - Enter amount, date, and optional note
+   - Balance updates automatically; debt marked as paid off when balance hits zero
+
+4. **Compare Strategies**
+   - Switch to "Payoff Strategy" tab
+   - Toggle between Snowball and Avalanche
+   - View projected payoff timeline and total interest for each approach
+
+#### Utility Scripts
+
+**Feature Promo** - Send announcement to all users about the new debt feature:
+```bash
+cd manager
+npx ts-node scripts/send-feature-promo.ts                # Both Telegram & Email
+npx ts-node scripts/send-feature-promo.ts --telegram      # Telegram only
+npx ts-node scripts/send-feature-promo.ts --email         # Email only
+```
+
+Templates are stored in `manager/scripts/promo.txt` (Telegram) and `manager/scripts/promo-email.txt` (HTML email). Both support `{userName}` placeholder for personalisation.
 
 ### Weekly Email Summaries
 
