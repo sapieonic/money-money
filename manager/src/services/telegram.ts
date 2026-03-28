@@ -142,6 +142,26 @@ export function isHelpCommand(text: string): boolean {
 }
 
 /**
+ * Fast heuristic to detect if a message looks like a financial question.
+ * Used as a pre-filter before the LLM intent classifier to avoid
+ * wasting an LLM call on obvious bank SMS forwards.
+ */
+export function isQueryLike(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+
+  // Contains a question mark
+  if (lower.includes('?')) return true;
+
+  // Starts with common question words
+  if (/^(how\s|what|when|where|which|why|is\s|are\s|do\s|does\s|can\s|tell\s|show\s)/.test(lower)) return true;
+
+  // Contains finance-question phrases
+  if (/\b(how much|savings rate|total income|total expense|net remaining|my balance|my debt|my loan|my spend|my invest|paid off|pay off)\b/.test(lower)) return true;
+
+  return false;
+}
+
+/**
  * Get help message text
  */
 export function getHelpMessage(): string {
@@ -150,20 +170,21 @@ export function getHelpMessage(): string {
 
   return `<b>Finance Watch Bot</b>${aiPowered}
 
-I help you track your daily expenses by parsing your forwarded bank SMS messages.
+I help you track expenses and answer questions about your finances.
 
 <b>Commands:</b>
 /link - Link your Telegram account to Finance Watch
 /help - Show this help message
 
-<b>How to use:</b>
-1. First, link your account using /link
-2. Enter the code in Settings → Telegram Integration
-3. Forward any bank SMS to me
-4. I'll automatically add it as an expense!
-
-<b>Example messages I can parse:</b>
+<b>Track expenses:</b>
+Forward any bank SMS to me and I'll add it automatically.
 • Rs.500 debited at Amazon
 • Paid INR 250 to Swiggy
-• Your a/c debited by Rs.1,200.00`;
+• Your a/c debited by Rs.1,200.00
+${aiPowered ? `
+<b>Ask me anything:</b>
+• How much did I spend this week?
+• What's my top expense category?
+• When will my car loan be paid off?
+• What's my savings rate?` : ''}`;
 }

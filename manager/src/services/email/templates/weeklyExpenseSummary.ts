@@ -171,7 +171,8 @@ function generateLegendHTML(
  */
 export function generateWeeklyExpenseEmailHTML(
   analytics: WeeklyExpenseAnalytics,
-  userName: string
+  userName: string,
+  aiInsight?: string,
 ): string {
   const trendInfo = getTrendInfo(analytics.weekComparison.trend);
   const weekRange = `${formatDateDisplay(analytics.weekStart)} - ${formatDateDisplay(analytics.weekEnd)}`;
@@ -460,7 +461,7 @@ export function generateWeeklyExpenseEmailHTML(
               ` : ''}
 
               <!-- Insight Box -->
-              ${analytics.topCategory ? `
+              ${(aiInsight || analytics.topCategory) ? `
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td style="padding: 0 32px 28px;">
@@ -468,9 +469,13 @@ export function generateWeeklyExpenseEmailHTML(
                       <tr>
                         <td style="padding: 16px 20px;">
                           <div style="font-size: 14px; color: #f57c00; line-height: 1.5;">
-                            💡 <strong>Insight:</strong> ${getCategoryEmoji(analytics.topCategory.category)}
-                            <span style="text-transform: capitalize;">${analytics.topCategory.category}</span>
-                            was your top spending category at <strong>${analytics.topCategory.percentage.toFixed(0)}%</strong> of total expenses.
+                            💡 <strong>Insight:</strong>
+                            ${aiInsight
+                              ? aiInsight
+                              : `${getCategoryEmoji(analytics.topCategory!.category)}
+                                <span style="text-transform: capitalize;">${analytics.topCategory!.category}</span>
+                                was your top spending category at <strong>${analytics.topCategory!.percentage.toFixed(0)}%</strong> of total expenses.`
+                            }
                           </div>
                         </td>
                       </tr>
@@ -514,7 +519,8 @@ export function generateWeeklyExpenseEmailHTML(
  */
 export function generateWeeklyExpenseEmailText(
   analytics: WeeklyExpenseAnalytics,
-  userName: string
+  userName: string,
+  aiInsight?: string,
 ): string {
   const weekRange = `${formatDateDisplay(analytics.weekStart)} - ${formatDateDisplay(analytics.weekEnd)}`;
   const trendInfo = getTrendInfo(analytics.weekComparison.trend);
@@ -553,9 +559,11 @@ ${analytics.transactionCount} transactions • Avg ${formatCurrency(analytics.av
     });
   }
 
-  if (analytics.topCategory) {
+  if (aiInsight || analytics.topCategory) {
     text += `\n💡 INSIGHT\n${'-'.repeat(40)}\n`;
-    text += `${analytics.topCategory.category.charAt(0).toUpperCase() + analytics.topCategory.category.slice(1)} was your top category at ${analytics.topCategory.percentage.toFixed(0)}% of spending.\n`;
+    text += aiInsight
+      ? `${aiInsight}\n`
+      : `${analytics.topCategory!.category.charAt(0).toUpperCase() + analytics.topCategory!.category.slice(1)} was your top category at ${analytics.topCategory!.percentage.toFixed(0)}% of spending.\n`;
   }
 
   text += `\n${'='.repeat(50)}\nFinance Watch • Your Personal Finance Tracker\n`;

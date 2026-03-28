@@ -1,19 +1,11 @@
 /**
  * Daily Expense Narrative Generator
- * Uses Azure OpenAI to generate creative daily expense digests for Telegram
+ * Uses the configured LLM provider to generate creative daily expense digests for Telegram
  */
 
 import { DailyExpenseDigestData } from '../analytics/dailyExpenseAnalytics';
+import { getLLMProvider } from './factory';
 import { logger } from '../../utils/telemetry';
-
-interface AzureOpenAIResponse {
-  choices: {
-    message: {
-      content: string;
-    };
-    finish_reason: string;
-  }[];
-}
 
 const DAILY_DIGEST_SYSTEM_PROMPT = `You are a witty, friendly personal finance assistant named "Finance Watch". You send daily expense digests via Telegram.
 
@@ -75,50 +67,6 @@ Month-to-date: ₹${data.monthTotalSoFar} (Day ${data.dayOfMonth} of the month)
 Generate the daily digest message now.`;
 }
 
-/**
- * Call Azure OpenAI Chat Completions API
- */
-async function callAzureOpenAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const apiKey = process.env.AZURE_OPENAI_API_KEY;
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview';
-
-  if (!apiKey || !endpoint || !deployment) {
-    throw new Error('Azure OpenAI not configured');
-  }
-
-  const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-key': apiKey,
-    },
-    body: JSON.stringify({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.8, // Higher temperature for creative, varied responses
-      max_tokens: 600,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
-  }
-
-  const result = (await response.json()) as AzureOpenAIResponse;
-
-  if (!result.choices || result.choices.length === 0) {
-    throw new Error('No response from Azure OpenAI');
-  }
-
-  return result.choices[0].message.content.trim();
-}
 
 /**
  * Generate a simple template-based fallback message when LLM is unavailable
@@ -170,8 +118,20 @@ export async function generateDailyNarrative(
   userName: string
 ): Promise<string> {
   try {
+    const provider = getLLMProvider();
     const userPrompt = buildUserPrompt(data, userName);
-    const narrative = await callAzureOpenAI(DAILY_DIGEST_SYSTEM_PROMPT, userPrompt);
+    const narrative = await provider.chatCompletion(
+      [
+        { role: 'system', content: DAILY_DIGEST_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      { temperature: 0.8, maxTokens: 600 },
+    );
+
+    if (!narrative) {
+      return generateFallbackMessage(data, userName);
+    }
+
     return narrative;
   } catch (err) {
     logger.error('Failed to generate AI narrative, using fallback', { error: String(err) });

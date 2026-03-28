@@ -6,6 +6,8 @@ import {
   ILLMProvider,
   LLMParseResult,
   ParsedExpenseResult,
+  ChatMessage,
+  ChatCompletionOptions,
   EXPENSE_PARSING_SYSTEM_PROMPT,
 } from '../types';
 import { logger } from '../../../utils/telemetry';
@@ -15,11 +17,6 @@ interface AzureOpenAIConfig {
   endpoint: string;
   deployment: string;
   apiVersion: string;
-}
-
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant';
-  content: string;
 }
 
 interface AzureOpenAIResponse {
@@ -71,7 +68,7 @@ export class AzureOpenAIProvider implements ILLMProvider {
         { role: 'user', content: message },
       ];
 
-      const response = await this.callChatCompletion(messages);
+      const response = await this.callChatCompletion(messages, undefined);
 
       if (!response.choices || response.choices.length === 0) {
         return {
@@ -121,7 +118,29 @@ export class AzureOpenAIProvider implements ILLMProvider {
     }
   }
 
-  private async callChatCompletion(messages: ChatMessage[]): Promise<AzureOpenAIResponse> {
+  async chatCompletion(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<string | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    try {
+      const response = await this.callChatCompletion(messages, {
+        temperature: options?.temperature ?? 0.7,
+        maxTokens: options?.maxTokens ?? 500,
+      });
+
+      if (!response.choices || response.choices.length === 0) {
+        return null;
+      }
+
+      return response.choices[0].message.content.trim();
+    } catch (err) {
+      logger.error('Azure OpenAI chat completion error', { error: String(err) });
+      return null;
+    }
+  }
+
+  private async callChatCompletion(messages: ChatMessage[], opts?: { temperature?: number; maxTokens?: number }): Promise<AzureOpenAIResponse> {
     const url = `${this.config.endpoint}/openai/deployments/${this.config.deployment}/chat/completions?api-version=${this.config.apiVersion}`;
 
     const response = await fetch(url, {
@@ -132,9 +151,9 @@ export class AzureOpenAIProvider implements ILLMProvider {
       },
       body: JSON.stringify({
         messages,
-        temperature: 0.1, // Low temperature for consistent parsing
-        max_tokens: 500,
-        response_format: { type: 'json_object' },
+        temperature: opts?.temperature ?? 0.1,
+        max_tokens: opts?.maxTokens ?? 500,
+        ...(opts ? {} : { response_format: { type: 'json_object' } }),
       }),
     });
 

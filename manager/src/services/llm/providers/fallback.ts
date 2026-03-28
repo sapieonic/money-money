@@ -2,13 +2,17 @@
  * Fallback Provider - Uses regex-based parsing when no LLM is configured
  */
 
-import { ILLMProvider, LLMParseResult } from '../types';
+import { ILLMProvider, LLMParseResult, ChatMessage, ChatCompletionOptions } from '../types';
 
 export class FallbackProvider implements ILLMProvider {
   readonly name = 'fallback';
 
   isConfigured(): boolean {
     return true; // Always configured as fallback
+  }
+
+  async chatCompletion(_messages: ChatMessage[], _options?: ChatCompletionOptions): Promise<string | null> {
+    return null; // Fallback provider cannot generate free-form text
   }
 
   async parseExpenseMessage(message: string): Promise<LLMParseResult> {

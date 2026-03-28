@@ -11,6 +11,7 @@ import {
   generateWeeklyExpenseEmailHTML,
   generateWeeklyExpenseEmailText,
 } from '../services/email';
+import { generateWeeklyInsight } from '../services/llm/weeklyInsight';
 import { logger } from '../utils/telemetry';
 
 // GET /api/daily-expenses - Get all with optional date range filtering and pagination
@@ -259,9 +260,10 @@ export const sendWeeklySummaryEmail = withAuth(async (event: AuthenticatedEvent)
       return badRequest('No expenses found for this week');
     }
 
-    // Generate email content
-    const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name);
-    const textBody = generateWeeklyExpenseEmailText(analytics, user.name);
+    // Generate AI insight and email content
+    const aiInsight = await generateWeeklyInsight(analytics, user.name);
+    const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name, aiInsight);
+    const textBody = generateWeeklyExpenseEmailText(analytics, user.name, aiInsight);
     const subject = `📊 Your Weekly Expense Summary (${analytics.weekStart} - ${analytics.weekEnd})`;
 
     // Send email
