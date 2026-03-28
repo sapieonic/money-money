@@ -51,9 +51,10 @@ A full-stack personal finance management application to track income, expenses, 
 - **Scheduled payment processing** — runs every 4 days to apply EMI payments automatically
 
 ### Telegram Bot Integration
-- **AI-powered expense parsing** using LLM (Azure OpenAI, with extensible architecture)
+- **AI-powered expense parsing** using LLM (Azure OpenAI, Databricks Claude, with extensible architecture)
 - **Automatic expense tracking** via forwarded bank SMS messages
 - **Smart categorization** - automatically categorizes expenses based on vendor/description
+- **Conversational financial queries** - ask questions like "How much did I spend this week?" or "What's my savings rate?"
 - Secure account linking with 6-digit verification codes
 - Instant confirmation messages for added expenses
 - Fallback regex parsing when LLM is not configured
@@ -61,6 +62,7 @@ A full-stack personal finance management application to track income, expenses, 
 
 ### Weekly Email Summary
 - **Automated weekly reports** sent every Monday at 9 AM IST
+- **AI-powered insight** — personalized spending analysis highlighting actionable patterns
 - **Spending breakdown** by category with percentages
 - **Top vendors** analysis
 - **Week-over-week comparison** showing spending trends
@@ -78,6 +80,7 @@ A full-stack personal finance management application to track income, expenses, 
 - **Per-month ledger** — clones active templates on first access, then tracks month-specific changes
 - Add, edit, or remove income, expense, and investment items for any month without affecting global templates
 - **Ad-hoc items** — add one-off entries (e.g., a bonus, extra bill) that only appear in that month
+- **AI insights** — auto-generated month-over-month comparison highlighting income/expense shifts and net position
 - Summary cards: Total Income, Expenses, SIPs, Investments, Daily Expenses, Remaining
 - Month picker to navigate between months
 - **Dashboard integration** — dashboard summary automatically uses ledger data for the current month when available
@@ -398,23 +401,29 @@ Daily expenses are categorized for better tracking and analysis:
 - **Personal** - Personal care, miscellaneous
 - **Other** - Uncategorized expenses
 
-### LLM-Powered Expense Parsing
+### LLM-Powered AI Features
 
-The system uses a pluggable LLM architecture for intelligent expense parsing:
+The system uses a pluggable LLM architecture (`ILLMProvider` interface) for all AI features:
+
+- **Expense Parsing** — Parse bank SMS into structured expenses (Telegram bot)
+- **Conversational Queries** — Answer natural-language financial questions (Telegram bot)
+- **Daily Digest** — Generate creative daily expense summaries (scheduled Telegram notification)
+- **Expense Reminders** — Generate friendly payment reminders (scheduled Telegram notification)
+- **Weekly Email Insight** — Personalized spending analysis paragraph (weekly email)
+- **Monthly Ledger Insight** — Month-over-month comparison bullets (monthly tracker page)
 
 #### Architecture
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│ Telegram Message│────▶│   LLM Factory    │────▶│  LLM Provider   │
-└─────────────────┘     └──────────────────┘     └─────────────────┘
-                               │                        │
-                               │ Auto-detect or         │ Azure OpenAI
-                               │ explicit config        │ (more coming)
-                               │                        │
-                               ▼                        ▼
-                        ┌──────────────────┐     ┌─────────────────┐
-                        │ Fallback Provider│     │ Parsed Expense  │
-                        │ (Regex-based)    │     │ with Category   │
+│ Telegram Message│──┐  │   LLM Factory    │────▶│  LLM Provider   │
+└─────────────────┘  │  │  getLLMProvider() │     └─────────────────┘
+┌─────────────────┐  ├─▶│                  │            │
+│ Scheduled Jobs  │──┤  └──────────────────┘   Azure OpenAI /
+└─────────────────┘  │         │               Databricks Claude
+┌─────────────────┐  │         ▼                        │
+│ Email / Ledger  │──┘  ┌──────────────────┐     ┌──────┴──────────┐
+└─────────────────┘     │ Fallback Provider│     │ parseExpense()  │
+                        │ (Regex-based)    │     │ chatCompletion()│
                         └──────────────────┘     └─────────────────┘
 ```
 
@@ -511,6 +520,13 @@ The Telegram bot allows you to track expenses on-the-go by simply forwarding ban
    - The bot uses AI (or regex fallback) to parse the expense
    - Automatically categorizes based on vendor/description
    - View your expenses in the Daily Expenses page
+
+6. **Ask Questions** (requires LLM provider)
+   - Ask spending questions: "How much did I spend this week?"
+   - Query categories: "What's my top expense category?"
+   - Check debts: "When will my car loan be paid off?"
+   - Savings overview: "What's my savings rate?"
+   - The bot auto-detects whether your message is an expense or a question
 
 #### Azure OpenAI Setup
 

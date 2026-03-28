@@ -9,6 +9,7 @@ import {
   Tabs,
   Tab,
   Paper,
+  Skeleton,
 } from '@mui/material';
 import {
   AccountBalance,
@@ -19,6 +20,7 @@ import {
   ShoppingCart,
   CalendarMonth,
   ViewList,
+  AutoAwesome,
 } from '@mui/icons-material';
 import SummaryCard from '../components/common/SummaryCard';
 import LedgerSection from '../components/monthly-tracker/LedgerSection';
@@ -74,6 +76,8 @@ const MonthlyTracker: React.FC = () => {
   const [dailyExpenses, setDailyExpenses] = useState<DailyExpense[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
+  const [insight, setInsight] = useState<string | null>(null);
+  const [insightLoading, setInsightLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(89);
@@ -101,6 +105,8 @@ const MonthlyTracker: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
+      setInsightLoading(true);
+      setInsight(null);
       const [year, monthNum] = month.split('-').map(Number);
       const lastDay = new Date(year, monthNum, 0).getDate();
       const startDate = `${month}-01`;
@@ -114,6 +120,7 @@ const MonthlyTracker: React.FC = () => {
 
       setLedger(ledgerResult.ledger);
       setDailyExpensesTotal(ledgerResult.dailyExpensesTotal);
+      setInsight(ledgerResult.insight || null);
       setDailyExpenses(dailyExpensesResult.items);
       // Filter for active recurring expenses with due dates
       setRecurringExpenses(
@@ -127,6 +134,7 @@ const MonthlyTracker: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+      setInsightLoading(false);
     }
   };
 
@@ -356,6 +364,44 @@ const MonthlyTracker: React.FC = () => {
           />
         </Grid>
       </Grid>
+
+      {/* AI Insight */}
+      {(insightLoading || insight) && (
+        <Paper
+          sx={{
+            mb: 3,
+            p: 2.5,
+            borderLeft: 4,
+            borderColor: 'primary.main',
+            bgcolor: 'action.hover',
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            <AutoAwesome sx={{ fontSize: 18, color: 'primary.main' }} />
+            <Typography variant="subtitle2" color="primary.main" fontWeight={600}>
+              AI Insights
+            </Typography>
+            {insightLoading && (
+              <CircularProgress size={14} sx={{ ml: 0.5 }} />
+            )}
+          </Box>
+          {insightLoading && !insight ? (
+            <Box>
+              <Skeleton variant="text" width="90%" />
+              <Skeleton variant="text" width="75%" />
+              <Skeleton variant="text" width="60%" />
+            </Box>
+          ) : (
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              sx={{ whiteSpace: 'pre-line', lineHeight: 1.7 }}
+            >
+              {insight}
+            </Typography>
+          )}
+        </Paper>
+      )}
 
       {/* Tabs */}
       <Paper sx={{ mb: 3 }}>

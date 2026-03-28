@@ -17,6 +17,16 @@ export interface LLMParseResult {
   error?: string;
 }
 
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatCompletionOptions {
+  temperature?: number;
+  maxTokens?: number;
+}
+
 export interface LLMProviderConfig {
   apiKey: string;
   endpoint?: string;
@@ -40,6 +50,12 @@ export interface ILLMProvider {
    * @returns Parsed expense data or error
    */
   parseExpenseMessage(message: string): Promise<LLMParseResult>;
+
+  /**
+   * Generic chat completion for free-form text generation
+   * @returns The generated text, or null if the provider doesn't support general chat
+   */
+  chatCompletion(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<string | null>;
 
   /**
    * Check if the provider is properly configured

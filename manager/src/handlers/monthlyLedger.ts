@@ -8,9 +8,16 @@ import { DailyExpense } from '../models/DailyExpense';
 import { success, error, badRequest, notFound } from '../utils/response';
 import { withAuth } from '../middleware/auth';
 import { AuthenticatedEvent } from '../types';
+import { generateMonthlyInsight } from '../services/llm/monthlyInsight';
 import { logger } from '../utils/telemetry';
 
 const MONTH_REGEX = /^\d{4}-\d{2}$/;
+
+function getPreviousMonth(month: string): string {
+  const [y, m] = month.split('-').map(Number);
+  const prev = new Date(y, m - 2, 1); // m-1 is current (0-indexed), m-2 is previous
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+}
 
 export const getOrCreate = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {
@@ -88,7 +95,30 @@ export const getOrCreate = withAuth(async (event: AuthenticatedEvent): Promise<A
 
     const dailyExpensesTotal = dailyExpensesResult[0]?.total || 0;
 
-    return success({ ledger, dailyExpensesTotal });
+    // Fetch previous month ledger and daily expenses for insight comparison
+    const prevMonth = getPreviousMonth(month);
+    const [previousLedger, prevDailyResult] = await Promise.all([
+      MonthlyLedger.findOne({ userId, month: prevMonth }),
+      DailyExpense.aggregate([
+        {
+          $match: {
+            userId,
+            isActive: true,
+            date: {
+              $gte: new Date(parseInt(prevMonth.split('-')[0]), parseInt(prevMonth.split('-')[1]) - 1, 1),
+              $lt: new Date(year, monthNum - 1, 1),
+            },
+          },
+        },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+    ]);
+    const prevDailyTotal = prevDailyResult[0]?.total || 0;
+
+    // Generate AI-powered monthly insight
+    const insight = await generateMonthlyInsight(ledger, dailyExpensesTotal, previousLedger, prevDailyTotal);
+
+    return success({ ledger, dailyExpensesTotal, insight });
   } catch (err) {
     logger.error('Error fetching/creating monthly ledger', { error: String(err) });
     return error('Failed to fetch monthly ledger');

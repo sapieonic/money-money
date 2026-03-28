@@ -13,9 +13,12 @@ import {
   isLinkCommand,
   isStartCommand,
   isHelpCommand,
+  isQueryLike,
   getHelpMessage,
   TelegramUpdate,
 } from '../services/telegram';
+import { classifyIntent } from '../services/llm/intentClassifier';
+import { answerFinancialQuery } from '../services/llm/financialQuery';
 import { startRequestSpan, checkColdStart, recordError, flush, logger } from '../utils/telemetry';
 
 // POST /api/telegram/webhook - Receives messages from Telegram (no auth)
@@ -97,8 +100,7 @@ This code expires in 10 minutes.`
       return success({ ok: true });
     }
 
-    // For any other message, try to parse it as an expense
-    // First, check if the user is linked
+    // For any other message, check if the user is linked
     const user = await User.findOne({ telegramChatId: chatId });
 
     if (!user) {
@@ -111,7 +113,28 @@ Send /link to get a code, then enter it in the Finance Watch app Settings.`
       return success({ ok: true });
     }
 
-    // Try to parse the message as an expense using LLM
+    // Classify intent: expense entry or financial query
+    const queryHeuristic = isQueryLike(text);
+    const classification = await classifyIntent(text, queryHeuristic);
+
+    logger.info('Message classified', {
+      intent: classification.intent,
+      queryType: classification.queryType || 'n/a',
+      confidence: classification.confidence,
+    });
+
+    // Handle financial queries
+    if (classification.intent === 'query' && classification.queryType) {
+      const answer = await answerFinancialQuery(
+        user.firebaseUid,
+        text,
+        classification.queryType,
+      );
+      await sendTelegramMessage(chatId, answer);
+      return success({ ok: true });
+    }
+
+    // Handle expense parsing (default path)
     const parseResult = await parseExpenseMessage(text);
 
     if (!parseResult.success || !parseResult.data) {
@@ -121,7 +144,7 @@ Send /link to get a code, then enter it in the Finance Watch app Settings.`
 
 ${parseResult.error || 'Please forward a bank SMS that contains an amount like "Rs.500" or "INR 250".'}
 
-Example: "Rs.500 debited at Amazon"`
+You can also ask me questions like "How much did I spend this week?"`
       );
       return success({ ok: true });
     }

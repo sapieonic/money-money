@@ -14,6 +14,7 @@ import {
 } from '../services/email';
 import { generateDailyNarrative } from '../services/llm/dailyNarrative';
 import { generateExpenseReminderMessage } from '../services/llm/expenseReminder';
+import { generateWeeklyInsight } from '../services/llm/weeklyInsight';
 import { sendTelegramMessage } from '../services/telegram';
 import { Expense } from '../models/Expense';
 import { Debt } from '../models/Debt';
@@ -66,9 +67,10 @@ export const sendWeeklyExpenseSummaries = async (
           continue;
         }
 
-        // Generate email content
-        const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name);
-        const textBody = generateWeeklyExpenseEmailText(analytics, user.name);
+        // Generate AI insight and email content
+        const aiInsight = await generateWeeklyInsight(analytics, user.name);
+        const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name, aiInsight);
+        const textBody = generateWeeklyExpenseEmailText(analytics, user.name, aiInsight);
         const subject = `📊 Your Weekly Expense Summary (${analytics.weekStart} - ${analytics.weekEnd})`;
 
         // Send email
@@ -511,8 +513,9 @@ export const sendTestWeeklySummary = async (
       return { success: false, message: 'No expenses found for last week' };
     }
 
-    const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name);
-    const textBody = generateWeeklyExpenseEmailText(analytics, user.name);
+    const aiInsight = await generateWeeklyInsight(analytics, user.name);
+    const htmlBody = generateWeeklyExpenseEmailHTML(analytics, user.name, aiInsight);
+    const textBody = generateWeeklyExpenseEmailText(analytics, user.name, aiInsight);
     const subject = `📊 Your Weekly Expense Summary (${analytics.weekStart} - ${analytics.weekEnd})`;
 
     const success = await sendWeeklyExpenseSummary(

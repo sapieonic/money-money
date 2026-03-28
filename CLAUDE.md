@@ -38,8 +38,15 @@ No test suite exists — `npm test` in manager is a no-op stub.
 - **Response helpers**: `success()`, `error()`, `notFound()`, `badRequest()`, `unauthorized()` in `utils/response.ts`. All handlers return `APIGatewayProxyResultV2` through these.
 - **Multi-tenancy**: Every DB query must filter by `userId`. All models use `isActive: true` for soft deletes.
 - **Factory pattern for providers**:
-  - LLM: `services/llm/factory.ts` — `ILLMProvider` interface, implementations in `providers/`. Auto-detects Azure OpenAI from env vars, falls back to regex.
+  - LLM: `services/llm/factory.ts` — `ILLMProvider` interface with `parseExpenseMessage()` and `chatCompletion()`. Providers: Azure OpenAI, Databricks Claude, Fallback (regex). All AI features go through this factory.
   - Email: `services/email/factory.ts` — `EmailProvider` interface, implementations in `providers/`. Auto-detects Mailjet from env vars, falls back to console.
+- **LLM modules** (all in `services/llm/`):
+  - `intentClassifier.ts` — classifies Telegram messages as expense or query
+  - `financialQuery.ts` — gathers scoped user data and generates natural-language answers
+  - `dailyNarrative.ts` — daily expense digest for Telegram
+  - `expenseReminder.ts` — expense due reminder for Telegram
+  - `weeklyInsight.ts` — personalized insight paragraph for weekly email
+  - `monthlyInsight.ts` — month-over-month comparison for monthly tracker
 - **Telemetry**: Custom lightweight OTLP exporter (`utils/telemetry.ts`), not the full OpenTelemetry SDK. Frontend uses Grafana Faro (`client/src/telemetry/`).
 
 ### Scheduled jobs (CloudWatch → Lambda, 120s timeout)
@@ -56,13 +63,15 @@ Defined in `serverless.yml`. All scheduled handlers are in `handlers/scheduledJo
 - React Query for server state; queries are co-located in service files
 
 ### Key cross-cutting flows
-- **Telegram → Expense**: webhook handler → LLM factory → parse SMS → save DailyExpense
+- **Telegram → Expense**: webhook → intent classifier → `parseExpenseMessage()` → save DailyExpense
+- **Telegram → Query**: webhook → intent classifier → `financialQuery.ts` gathers data by query type → `chatCompletion()` → reply
 - **Debt creation**: creates Debt document + auto-creates linked recurring Expense (category: loan)
-- **Monthly Ledger**: clones active income/expense/investment templates on first access per month, then tracks month-specific edits independently
+- **Monthly Ledger**: clones active income/expense/investment templates on first access per month, then tracks month-specific edits. Returns AI insight comparing with previous month.
+- **Weekly Email**: scheduled job → `weeklyInsight.ts` generates AI insight → embedded in HTML/text email alongside charts
 
 ## Environment Variables
 
-Backend requires `MONGODB_URI`, `MONGODB_DB_NAME`, `FIREBASE_PROJECT_ID` at minimum. Optional integrations (Telegram, Azure OpenAI, Mailjet, Grafana OTLP) are enabled by their respective env vars. All env vars must also be configured in `serverless.yml` for deployment.
+Backend requires `MONGODB_URI`, `MONGODB_DB_NAME`, `FIREBASE_PROJECT_ID` at minimum. Optional integrations (Telegram, Azure OpenAI, Databricks Claude, Mailjet, Grafana OTLP) are enabled by their respective env vars. All env vars must also be configured in `serverless.yml` for deployment.
 
 Frontend uses `VITE_` prefix. Requires `VITE_API_URL` and Firebase config vars.
 

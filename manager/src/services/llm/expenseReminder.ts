@@ -1,8 +1,9 @@
 /**
  * Expense Reminder Message Generator
- * Uses Azure OpenAI to generate friendly reminder messages for upcoming recurring expenses
+ * Uses the configured LLM provider to generate friendly reminder messages for upcoming recurring expenses
  */
 
+import { getLLMProvider } from './factory';
 import { logger } from '../../utils/telemetry';
 
 export interface ExpenseReminderData {
@@ -15,15 +16,6 @@ export interface ExpenseReminderData {
     category: string;
   }>;
   totalAmount: number;
-}
-
-interface AzureOpenAIResponse {
-  choices: {
-    message: {
-      content: string;
-    };
-    finish_reason: string;
-  }[];
 }
 
 const EXPENSE_REMINDER_SYSTEM_PROMPT = `You are a helpful, friendly personal finance assistant named "Finance Watch". You send expense reminders via Telegram.
@@ -79,51 +71,6 @@ Category Summary: ${categorySummary}
 Total Amount: ₹${formatAmount(data.totalAmount)}
 
 Generate a friendly reminder message now.`;
-}
-
-/**
- * Call Azure OpenAI Chat Completions API
- */
-async function callAzureOpenAI(systemPrompt: string, userPrompt: string): Promise<string> {
-  const apiKey = process.env.AZURE_OPENAI_API_KEY;
-  const endpoint = process.env.AZURE_OPENAI_ENDPOINT;
-  const deployment = process.env.AZURE_OPENAI_DEPLOYMENT;
-  const apiVersion = process.env.AZURE_OPENAI_API_VERSION || '2024-02-15-preview';
-
-  if (!apiKey || !endpoint || !deployment) {
-    throw new Error('Azure OpenAI not configured');
-  }
-
-  const url = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=${apiVersion}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'api-key': apiKey,
-    },
-    body: JSON.stringify({
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt },
-      ],
-      temperature: 0.7, // Moderate temperature for friendly but consistent tone
-      max_tokens: 500,
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Azure OpenAI API error: ${response.status} - ${errorText}`);
-  }
-
-  const result = (await response.json()) as AzureOpenAIResponse;
-
-  if (!result.choices || result.choices.length === 0) {
-    throw new Error('No response from Azure OpenAI');
-  }
-
-  return result.choices[0].message.content.trim();
 }
 
 /**
@@ -189,8 +136,20 @@ function capitalize(str: string): string {
  */
 export async function generateExpenseReminderMessage(data: ExpenseReminderData): Promise<string> {
   try {
+    const provider = getLLMProvider();
     const userPrompt = buildUserPrompt(data);
-    const message = await callAzureOpenAI(EXPENSE_REMINDER_SYSTEM_PROMPT, userPrompt);
+    const message = await provider.chatCompletion(
+      [
+        { role: 'system', content: EXPENSE_REMINDER_SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt },
+      ],
+      { temperature: 0.7, maxTokens: 500 },
+    );
+
+    if (!message) {
+      return generateFallbackMessage(data);
+    }
+
     return message;
   } catch (err) {
     logger.error('Failed to generate AI reminder message, using fallback', { error: String(err) });

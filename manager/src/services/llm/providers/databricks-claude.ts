@@ -8,6 +8,8 @@ import {
   ILLMProvider,
   LLMParseResult,
   ParsedExpenseResult,
+  ChatMessage,
+  ChatCompletionOptions,
   EXPENSE_PARSING_SYSTEM_PROMPT,
 } from '../types';
 import { logger } from '../../../utils/telemetry';
@@ -79,6 +81,28 @@ export class DatabricksClaudeProvider implements ILLMProvider {
     return !!(this.config.host && this.config.token);
   }
 
+  async chatCompletion(messages: ChatMessage[], options?: ChatCompletionOptions): Promise<string | null> {
+    if (!this.isConfigured()) {
+      return null;
+    }
+
+    try {
+      const response = await this.callInvocations(messages, {
+        temperature: options?.temperature ?? 0.7,
+        maxTokens: options?.maxTokens ?? 500,
+      });
+
+      if (!response.choices || response.choices.length === 0) {
+        return null;
+      }
+
+      return this.extractTextContent(response.choices[0].message.content);
+    } catch (err) {
+      logger.error('Databricks Claude chat completion error', { error: String(err) });
+      return null;
+    }
+  }
+
   async parseExpenseMessage(message: string): Promise<LLMParseResult> {
     if (!this.isConfigured()) {
       return {
@@ -91,7 +115,7 @@ export class DatabricksClaudeProvider implements ILLMProvider {
       const response = await this.callInvocations([
         { role: 'system', content: EXPENSE_PARSING_SYSTEM_PROMPT },
         { role: 'user', content: message },
-      ]);
+      ], undefined);
 
       if (!response.choices || response.choices.length === 0) {
         return {
@@ -134,7 +158,8 @@ export class DatabricksClaudeProvider implements ILLMProvider {
   }
 
   private async callInvocations(
-    messages: { role: string; content: string }[]
+    messages: { role: string; content: string }[],
+    opts?: { temperature?: number; maxTokens?: number },
   ): Promise<DatabricksResponse> {
     const url = `${this.config.host}/serving-endpoints/${this.config.servingEndpoint}/invocations`;
 
@@ -146,9 +171,9 @@ export class DatabricksClaudeProvider implements ILLMProvider {
       },
       body: JSON.stringify({
         messages,
-        max_tokens: 500,
-        temperature: 0.1,
-        response_format: EXPENSE_JSON_SCHEMA,
+        max_tokens: opts?.maxTokens ?? 500,
+        temperature: opts?.temperature ?? 0.1,
+        ...(opts ? {} : { response_format: EXPENSE_JSON_SCHEMA }),
       }),
     });
 

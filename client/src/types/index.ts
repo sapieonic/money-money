@@ -302,6 +302,7 @@ export interface MonthlyLedger {
 export interface MonthlyLedgerResponse {
   ledger: MonthlyLedger;
   dailyExpensesTotal: number;
+  insight?: string;
 }
 
 export interface PaginatedResponse<T> {
