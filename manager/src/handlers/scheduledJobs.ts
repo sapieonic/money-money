@@ -6,7 +6,7 @@
 import { ScheduledEvent, Context } from 'aws-lambda';
 import { connectToDatabase } from '../utils/db';
 import { User } from '../models/User';
-import { generateWeeklyAnalytics, generateDailyDigestData } from '../services/analytics';
+import { generateWeeklyAnalytics, generateDailyDigestData, generateMonthlyAnalytics } from '../services/analytics';
 import {
   sendWeeklyExpenseSummary,
   generateWeeklyExpenseEmailHTML,
@@ -15,6 +15,7 @@ import {
 import { generateDailyNarrative } from '../services/llm/dailyNarrative';
 import { generateExpenseReminderMessage } from '../services/llm/expenseReminder';
 import { generateWeeklyInsight } from '../services/llm/weeklyInsight';
+import { generateMonthlyTelegramDigest } from '../services/llm/monthlyTelegramDigest';
 import { sendTelegramMessage } from '../services/telegram';
 import { Expense } from '../models/Expense';
 import { Debt } from '../models/Debt';
@@ -204,6 +205,103 @@ export const sendDailyTelegramDigests = async (
         logger.error('Daily Telegram digest job failed', { error: String(err) });
         if (err instanceof Error) {
           recordError(err, { 'scheduled.error': 'daily_telegram_digest_failed' });
+        }
+        return {
+          success: false,
+          processed: 0,
+          sent: 0,
+          skipped: 0,
+          errors: 1,
+        };
+      }
+    }
+  );
+
+  try {
+    await flush();
+  } catch (e) {
+    console.error('Telemetry flush error:', e);
+  }
+  return result;
+};
+
+/**
+ * Send monthly AI expense digests via Telegram to all linked users
+ * Triggered on the 1st of every month at 9:30 PM IST, summarizing the month that just ended
+ */
+export const sendMonthlyTelegramDigests = async (
+  event: ScheduledEvent,
+  context: Context
+): Promise<{ success: boolean; processed: number; sent: number; skipped: number; errors: number }> => {
+  const result = await startRequestSpan(
+    'scheduled.monthlyTelegramDigest',
+    {
+      'faas.trigger': 'timer',
+      'scheduled.job': 'monthly_telegram_digest',
+    },
+    async () => {
+      checkColdStart();
+      logger.info('Starting monthly Telegram digest job');
+
+      try {
+        await connectToDatabase();
+
+        // Reference date = last day of the previous calendar month
+        const today = new Date();
+        const referenceDate = new Date(today.getFullYear(), today.getMonth(), 0);
+
+        const users = await User.find({
+          telegramChatId: { $exists: true, $ne: null },
+        });
+
+        logger.info('Found users with Telegram linked', { count: users.length });
+
+        let sent = 0;
+        let skipped = 0;
+        let errors = 0;
+
+        for (const user of users) {
+          try {
+            const analytics = await generateMonthlyAnalytics(user.firebaseUid, referenceDate);
+
+            if (analytics.transactionCount === 0) {
+              skipped++;
+              logger.info('Skipping user - no expenses last month', { userId: user.firebaseUid });
+              continue;
+            }
+
+            const message = await generateMonthlyTelegramDigest(analytics, user.name);
+            const messageSent = await sendTelegramMessage(user.telegramChatId!, message);
+
+            if (messageSent) {
+              sent++;
+              logger.info('Sent monthly digest', { userId: user.firebaseUid, month: analytics.monthLabel });
+            } else {
+              errors++;
+              logger.error('Failed to send monthly digest', { userId: user.firebaseUid });
+            }
+          } catch (err) {
+            errors++;
+            logger.error('Error processing user for monthly digest', {
+              userId: user.firebaseUid,
+              error: String(err),
+            });
+          }
+        }
+
+        logger.info('Monthly Telegram digest job complete', { sent, skipped, errors });
+
+        return {
+          success: true,
+          processed: users.length,
+          sent,
+          skipped,
+          errors,
+        };
+      } catch (err) {
+        logger.error('Monthly Telegram digest job failed', { error: String(err) });
+        if (err instanceof Error) {
+          recordError(err, { 'scheduled.error': 'monthly_telegram_digest_failed' });
         }
         return {
           success: false,
@@ -531,6 +629,65 @@ export const sendTestWeeklySummary = async (
     };
   } catch (err) {
     logger.error('Test summary failed', { error: String(err) });
+    return { success: false, message: String(err) };
+  }
+};
+
+/**
+ * Manual trigger for testing - sends a monthly Telegram digest to a specific user.
+ * Defaults to the previous calendar month; pass `{ month: 'YYYY-MM' }` to override.
+ */
+export const sendTestMonthlyTelegramDigest = async (
+  event: { userId?: string; email?: string; month?: string },
+  context: Context
+): Promise<{ success: boolean; message: string }> => {
+  try {
+    await connectToDatabase();
+
+    const user = event.userId
+      ? await User.findOne({ firebaseUid: event.userId })
+      : event.email
+        ? await User.findOne({ email: event.email })
+        : null;
+
+    if (!user) {
+      return { success: false, message: 'User not found' };
+    }
+
+    if (!user.telegramChatId) {
+      return { success: false, message: 'User has no Telegram linked' };
+    }
+
+    let referenceDate: Date;
+    if (event.month) {
+      const [y, m] = event.month.split('-').map(Number);
+      if (!y || !m) {
+        return { success: false, message: 'Invalid month format, expected YYYY-MM' };
+      }
+      // Last day of the requested month
+      referenceDate = new Date(y, m, 0);
+    } else {
+      const today = new Date();
+      referenceDate = new Date(today.getFullYear(), today.getMonth(), 0);
+    }
+
+    const analytics = await generateMonthlyAnalytics(user.firebaseUid, referenceDate);
+
+    if (analytics.transactionCount === 0) {
+      return { success: false, message: `No expenses found for ${analytics.monthLabel}` };
+    }
+
+    const message = await generateMonthlyTelegramDigest(analytics, user.name);
+    const success = await sendTelegramMessage(user.telegramChatId, message);
+
+    return {
+      success,
+      message: success
+        ? `Monthly digest sent to ${user.email} for ${analytics.monthLabel}`
+        : 'Failed to send Telegram message',
+    };
+  } catch (err) {
+    logger.error('Test monthly digest failed', { error: String(err) });
     return { success: false, message: String(err) };
   }
 };
