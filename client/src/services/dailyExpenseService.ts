@@ -5,6 +5,7 @@ export interface DailyExpenseFilters {
   startDate?: string;
   endDate?: string;
   category?: string;
+  search?: string;
   page?: number;
   limit?: number;
 }
@@ -15,6 +16,7 @@ export const dailyExpenseService = {
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.category) params.append('category', filters.category);
+    if (filters?.search) params.append('search', filters.search);
     if (filters?.page) params.append('page', filters.page.toString());
     if (filters?.limit) params.append('limit', filters.limit.toString());
 

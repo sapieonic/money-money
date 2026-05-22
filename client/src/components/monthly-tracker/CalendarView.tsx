@@ -306,7 +306,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           justifyContent: 'center',
           flexWrap: 'wrap',
           p: 1.5,
-          backgroundColor: 'grey.50',
+          backgroundColor: 'action.hover',
           borderRadius: 1,
         }}
       >

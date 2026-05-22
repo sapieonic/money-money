@@ -1,29 +1,29 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Button,
   Chip,
+  InputAdornment,
+  IconButton,
+  Stack,
 } from '@mui/material';
-import { Clear } from '@mui/icons-material';
+import { Clear, Search } from '@mui/icons-material';
 import type { DailyExpenseCategory } from '../../types';
 
 interface DateRangeFilterProps {
   startDate: string;
   endDate: string;
   category: string;
+  search: string;
   onStartDateChange: (date: string) => void;
   onEndDateChange: (date: string) => void;
   onCategoryChange: (category: string) => void;
+  onSearchChange: (search: string) => void;
   onClear: () => void;
 }
 
-const categories: { value: DailyExpenseCategory | ''; label: string }[] = [
-  { value: '', label: 'All Categories' },
+const categories: { value: DailyExpenseCategory; label: string }[] = [
   { value: 'food', label: 'Food' },
   { value: 'groceries', label: 'Groceries' },
   { value: 'entertainment', label: 'Entertainment' },
@@ -67,26 +67,51 @@ const presets = [
   },
 ];
 
+const SEARCH_DEBOUNCE_MS = 350;
+
 const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
   startDate,
   endDate,
   category,
+  search,
   onStartDateChange,
   onEndDateChange,
   onCategoryChange,
+  onSearchChange,
   onClear,
 }) => {
+  // Local input state so typing feels instant; propagate after a debounce.
+  const [searchInput, setSearchInput] = useState(search);
+
+  // Keep local input in sync if parent clears the filter.
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    if (searchInput === search) return;
+    const id = window.setTimeout(() => {
+      onSearchChange(searchInput);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [searchInput, search, onSearchChange]);
+
   const handlePresetClick = (preset: (typeof presets)[0]) => {
     const { start, end } = preset.getValue();
     onStartDateChange(start);
     onEndDateChange(end);
   };
 
-  const hasFilters = startDate || endDate || category;
+  const handleCategoryToggle = (value: DailyExpenseCategory) => {
+    onCategoryChange(category === value ? '' : value);
+  };
+
+  const hasFilters = startDate || endDate || category || search;
 
   return (
     <Box sx={{ mb: 3 }}>
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+      {/* Date presets */}
+      <Stack direction="row" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', gap: 1 }}>
         {presets.map((preset) => (
           <Chip
             key={preset.label}
@@ -96,10 +121,41 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             size="small"
           />
         ))}
-      </Box>
-      <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+      </Stack>
+
+      {/* Search + date range */}
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{ mb: 2, flexWrap: 'wrap', alignItems: 'center', gap: 2 }}
+      >
         <TextField
-          label="From Date"
+          placeholder="Search description or vendor"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
+          size="small"
+          sx={{ minWidth: 240, flexGrow: 1, maxWidth: 360 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: searchInput ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setSearchInput('')}
+                  aria-label="clear search"
+                >
+                  <Clear fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }}
+        />
+        <TextField
+          label="From"
           type="date"
           value={startDate}
           onChange={(e) => onStartDateChange(e.target.value)}
@@ -108,7 +164,7 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           sx={{ minWidth: 150 }}
         />
         <TextField
-          label="To Date"
+          label="To"
           type="date"
           value={endDate}
           onChange={(e) => onEndDateChange(e.target.value)}
@@ -116,20 +172,6 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
           size="small"
           sx={{ minWidth: 150 }}
         />
-        <FormControl size="small" sx={{ minWidth: 150 }}>
-          <InputLabel>Category</InputLabel>
-          <Select
-            value={category}
-            label="Category"
-            onChange={(e) => onCategoryChange(e.target.value)}
-          >
-            {categories.map((c) => (
-              <MenuItem key={c.value} value={c.value}>
-                {c.label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
         {hasFilters && (
           <Button
             startIcon={<Clear />}
@@ -140,7 +182,24 @@ const DateRangeFilter: React.FC<DateRangeFilterProps> = ({
             Clear
           </Button>
         )}
-      </Box>
+      </Stack>
+
+      {/* Category quick-toggle chips */}
+      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+        {categories.map((c) => {
+          const selected = category === c.value;
+          return (
+            <Chip
+              key={c.value}
+              label={c.label}
+              onClick={() => handleCategoryToggle(c.value)}
+              color={selected ? 'primary' : 'default'}
+              variant={selected ? 'filled' : 'outlined'}
+              size="small"
+            />
+          );
+        })}
+      </Stack>
     </Box>
   );
 };

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { ThemeProvider, CssBaseline, Box, Toolbar } from '@mui/material';
+import { Box, Toolbar } from '@mui/material';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { theme } from './theme/theme';
+import { ThemeModeProvider } from './context/ThemeModeContext';
+import { ToastProvider } from './context/ToastContext';
 import { usePageTracking } from './hooks/usePageTracking';
 import Navbar from './components/common/Navbar';
 import Sidebar from './components/common/Sidebar';
@@ -98,24 +99,25 @@ const AppLayout: React.FC = () => {
 const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <AuthProvider>
-          <BrowserRouter>
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/*"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout />
-                  </ProtectedRoute>
-                }
-              />
-            </Routes>
-          </BrowserRouter>
-        </AuthProvider>
-      </ThemeProvider>
+      <AuthProvider>
+        <ThemeModeProvider>
+          <ToastProvider>
+            <BrowserRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/*"
+                  element={
+                    <ProtectedRoute>
+                      <AppLayout />
+                    </ProtectedRoute>
+                  }
+                />
+              </Routes>
+            </BrowserRouter>
+          </ToastProvider>
+        </ThemeModeProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
 };

@@ -8,6 +8,7 @@
     "deploy:prod": "serverless deploy --stage prod",
     "logs": "serverless logs -f",
     "test": "echo \"Error: no test specified\" && exit 1",
+    "typecheck": "tsc --noEmit",
     "migrate:email-prefs": "ts-node scripts/migrate-email-preferences.ts"
   },
   "keywords": [],

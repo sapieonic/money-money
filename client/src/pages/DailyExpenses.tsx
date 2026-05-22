@@ -7,7 +7,6 @@ import {
   Alert,
   Paper,
   Grid,
-  Snackbar,
 } from '@mui/material';
 import { Add, Email, ExpandMore } from '@mui/icons-material';
 import DailyExpenseList from '../components/daily-expenses/DailyExpenseList';
@@ -15,10 +14,12 @@ import DailyExpenseForm from '../components/daily-expenses/DailyExpenseForm';
 import DateRangeFilter from '../components/daily-expenses/DateRangeFilter';
 import WeeklyAnalyticsCharts from '../components/daily-expenses/WeeklyAnalyticsCharts';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import { SkeletonDailyExpenses } from '../components/common/Skeletons';
 import { dailyExpenseService } from '../services/dailyExpenseService';
 import type { DailyExpenseFilters } from '../services/dailyExpenseService';
 import type { DailyExpense, DailyExpenseSummary, WeeklyExpenseAnalytics } from '../types';
 import { formatCurrency } from '../utils/formatters';
+import { useToast } from '../context/ToastContext';
 
 const PAGE_SIZE = 50;
 
@@ -46,14 +47,11 @@ const DailyExpenses: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+  const [search, setSearch] = useState('');
 
   // Email sending state
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
-    open: false,
-    message: '',
-    severity: 'success',
-  });
+  const { showToast } = useToast();
 
   const loadExpenses = useCallback(async (loadPage = 1, append = false) => {
     try {
@@ -70,6 +68,7 @@ const DailyExpenses: React.FC = () => {
       if (startDate) filters.startDate = startDate;
       if (endDate) filters.endDate = endDate;
       if (categoryFilter) filters.category = categoryFilter;
+      if (search) filters.search = search;
 
       const requests: [ReturnType<typeof dailyExpenseService.getAll>, ...Promise<unknown>[]] = [
         dailyExpenseService.getAll(filters),
@@ -105,7 +104,7 @@ const DailyExpenses: React.FC = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [startDate, endDate, categoryFilter]);
+  }, [startDate, endDate, categoryFilter, search]);
 
   useEffect(() => {
     loadExpenses(1, false);
@@ -135,13 +134,16 @@ const DailyExpenses: React.FC = () => {
       setSaving(true);
       if (editingExpense) {
         await dailyExpenseService.update(editingExpense._id, data);
+        showToast('Expense updated', 'success');
       } else {
         await dailyExpenseService.create(data);
+        showToast('Expense added', 'success');
       }
       setFormOpen(false);
       loadExpenses(1, false);
     } catch (err) {
       console.error(err);
+      showToast('Failed to save expense', 'error');
     } finally {
       setSaving(false);
     }
@@ -153,9 +155,11 @@ const DailyExpenses: React.FC = () => {
       await dailyExpenseService.delete(deletingExpense._id);
       setDeleteDialogOpen(false);
       setDeletingExpense(null);
+      showToast('Expense deleted', 'success');
       loadExpenses(1, false);
     } catch (err) {
       console.error(err);
+      showToast('Failed to delete expense', 'error');
     }
   };
 
@@ -163,39 +167,36 @@ const DailyExpenses: React.FC = () => {
     setStartDate('');
     setEndDate('');
     setCategoryFilter('');
+    setSearch('');
   };
 
   const handleSendWeeklySummary = async () => {
     try {
       setSendingEmail(true);
       const response = await dailyExpenseService.sendWeeklySummary();
-      setSnackbar({
-        open: true,
-        message: `Weekly summary sent to ${response.sentTo}`,
-        severity: 'success',
-      });
+      showToast(`Weekly summary sent to ${response.sentTo}`, 'success');
     } catch (err) {
       console.error(err);
-      setSnackbar({
-        open: true,
-        message: 'Failed to send weekly summary email',
-        severity: 'error',
-      });
+      showToast('Failed to send weekly summary email', 'error');
     } finally {
       setSendingEmail(false);
     }
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar((prev) => ({ ...prev, open: false }));
   };
 
   const filteredTotal = expenses.reduce((sum, exp) => sum + exp.amount, 0);
 
   if (loading && expenses.length === 0) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
+      <Box>
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="h4" fontWeight={700} gutterBottom>
+            Daily Spending
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Track your day-to-day spending
+          </Typography>
+        </Box>
+        <SkeletonDailyExpenses />
       </Box>
     );
   }
@@ -297,9 +298,11 @@ const DailyExpenses: React.FC = () => {
         startDate={startDate}
         endDate={endDate}
         category={categoryFilter}
+        search={search}
         onStartDateChange={setStartDate}
         onEndDateChange={setEndDate}
         onCategoryChange={setCategoryFilter}
+        onSearchChange={setSearch}
         onClear={handleClearFilters}
       />
 
@@ -343,22 +346,6 @@ const DailyExpenses: React.FC = () => {
         onCancel={() => setDeleteDialogOpen(false)}
         isDestructive
       />
-
-      {/* Snackbar for email notifications */}
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbar.severity}
-          sx={{ width: '100%' }}
-        >
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

@@ -16,8 +16,11 @@ import {
   AccountCircle,
   Logout,
   Settings,
+  Brightness4,
+  Brightness7,
 } from '@mui/icons-material';
 import { useAuth } from '../../context/AuthContext';
+import { useThemeMode } from '../../context/ThemeModeContext';
 import { useNavigate } from 'react-router-dom';
 
 interface NavbarProps {
@@ -26,6 +29,7 @@ interface NavbarProps {
 
 const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
   const { user, logout } = useAuth();
+  const { mode, toggleMode } = useThemeMode();
   const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -55,7 +59,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
       position="fixed"
       sx={{
         zIndex: (theme) => theme.zIndex.drawer + 1,
-        backgroundColor: 'white',
+        backgroundColor: 'background.paper',
         color: 'text.primary',
       }}
       elevation={1}
@@ -98,6 +102,14 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuClick }) => {
 
         {user && (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton
+              onClick={toggleMode}
+              color="inherit"
+              aria-label={mode === 'dark' ? 'switch to light mode' : 'switch to dark mode'}
+              title={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+            </IconButton>
             {!isMobile && (
               <Typography variant="body2" color="text.secondary">
                 {user.displayName || user.email}
