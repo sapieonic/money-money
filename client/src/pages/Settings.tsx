@@ -234,7 +234,7 @@ const Settings: React.FC = () => {
             {telegramStatus?.linked ? (
               /* Connected State */
               <>
-                <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+                <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'action.hover' }}>
                   <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                     How to add expenses:
                   </Typography>
@@ -258,7 +258,7 @@ const Settings: React.FC = () => {
             ) : (
               /* Not Connected State */
               <>
-                <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'grey.50' }}>
+                <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: 'action.hover' }}>
                   <Typography variant="subtitle2" fontWeight={600} gutterBottom>
                     How to connect:
                   </Typography>

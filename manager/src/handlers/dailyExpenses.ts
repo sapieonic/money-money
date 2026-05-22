@@ -19,7 +19,7 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
   try {
     await connectToDatabase();
 
-    const { startDate, endDate, category, page: pageStr, limit: limitStr } = event.queryStringParameters || {};
+    const { startDate, endDate, category, search, page: pageStr, limit: limitStr } = event.queryStringParameters || {};
 
     // Pagination
     const page = Math.max(1, parseInt(pageStr || '1', 10));
@@ -49,6 +49,13 @@ export const getAll = withAuth(async (event: AuthenticatedEvent): Promise<APIGat
     // Category filter
     if (category) {
       query.category = category;
+    }
+
+    // Free-text search on vendor or description (case-insensitive)
+    if (search && search.trim()) {
+      const escaped = search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      query.$or = [{ description: regex }, { vendor: regex }];
     }
 
     const [items, total] = await Promise.all([
