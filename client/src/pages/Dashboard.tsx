@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Box,
   Grid,
   Typography,
   Paper,
-  CircularProgress,
   Alert,
   Chip,
   List,
@@ -12,27 +11,28 @@ import {
   ListItemText,
 } from '@mui/material';
 import {
-  AccountBalance,
-  Receipt,
-  TrendingUp,
-  Savings,
-  AttachMoney,
+  AccountBalanceWallet,
+  CreditCard,
   Money,
+  Receipt,
+  Savings,
   ShoppingCart,
+  TrendingUp,
 } from '@mui/icons-material';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Legend,
-  Tooltip,
-} from 'recharts';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import SummaryCard from '../components/common/SummaryCard';
+import StatCard from '../components/dashboard/StatCard';
+import HeroHeader from '../components/dashboard/HeroHeader';
+import TrendChart from '../components/dashboard/TrendChart';
+import AllocationBar from '../components/dashboard/AllocationBar';
+import UpcomingPanel from '../components/dashboard/UpcomingPanel';
+import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
 import { dashboardService } from '../services/dashboardService';
 import { settingsService } from '../services/settingsService';
-import type { DashboardData, Income } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { useAuth } from '../context/AuthContext';
+import type { Income } from '../types';
+import { formatCompactNumber, formatCurrency } from '../utils/formatters';
 import { categoryColors } from '../theme/theme';
 
 const incomeTypeColors: Record<string, string> = {
@@ -44,41 +44,53 @@ const incomeTypeColors: Record<string, string> = {
   other: '#607d8b',
 };
 
+const pctChange = (current: number, previous: number): number | undefined => {
+  if (!previous || !Number.isFinite(previous)) return undefined;
+  return ((current - previous) / Math.abs(previous)) * 100;
+};
+
+const compactINR = (amount: number) => `₹${formatCompactNumber(amount)}`;
+
 const Dashboard: React.FC = () => {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [exchangeRate, setExchangeRate] = useState(89);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  useEffect(() => {
-    loadDashboard();
-    loadSettings();
-  }, []);
+  const {
+    data,
+    isLoading: dashboardLoading,
+    isError,
+  } = useQuery({
+    queryKey: ['dashboard'],
+    queryFn: dashboardService.getDashboard,
+  });
 
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const result = await dashboardService.getDashboard();
-      setData(result);
-      setError(null);
-    } catch (err) {
-      setError('Failed to load dashboard data');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data: snapshots = [] } = useQuery({
+    queryKey: ['snapshots'],
+    queryFn: () => dashboardService.getSnapshots(12),
+  });
 
-  const loadSettings = async () => {
-    try {
-      const settings = await settingsService.get();
-      setExchangeRate(settings.exchangeRates.USD || 89);
-    } catch (err) {
-      console.error(err);
-    }
-  };
+  const { data: settings } = useQuery({
+    queryKey: ['settings'],
+    queryFn: settingsService.get,
+  });
 
-  // Helper to get income amount in INR (RSU may be stored in USD)
+  const exchangeRate = settings?.exchangeRates?.USD || 89;
+
+  if (dashboardLoading) {
+    return <DashboardSkeleton />;
+  }
+
+  if (isError || !data) {
+    return (
+      <Alert severity="error" sx={{ m: 2 }}>
+        Failed to load dashboard data
+      </Alert>
+    );
+  }
+
+  const { summary } = data;
+
+  // RSU income may be stored in USD; convert to INR for totals.
   const getIncomeINR = (income: Income) => {
     if (income.type === 'rsu_vesting' && income.currency === 'USD') {
       return income.amount * exchangeRate;
@@ -86,42 +98,43 @@ const Dashboard: React.FC = () => {
     return income.amount;
   };
 
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
-        <CircularProgress />
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert severity="error" sx={{ m: 2 }}>
-        {error}
-      </Alert>
-    );
-  }
-
-  if (!data) return null;
-
-  const { summary } = data;
-
-  // Calculate total tax from incomes
   const totalTaxPaid = data.incomes.reduce((sum, inc) => sum + (inc.taxPaid || 0), 0);
   const totalGrossIncome = data.incomes.reduce((sum, inc) => {
     if (inc.type === 'rsu_vesting') {
-      return sum + getIncomeINR(inc); // RSU has no pre-tax concept
+      return sum + getIncomeINR(inc);
     }
     return sum + (inc.preTaxAmount || inc.amount);
   }, 0);
 
+  const totalInvested = summary.totalSIPs + summary.totalVoluntaryInvestments;
+  const savingsRate = summary.totalIncome > 0 ? (summary.remaining / summary.totalIncome) * 100 : 0;
+  const investmentRate = summary.totalIncome > 0 ? (totalInvested / summary.totalIncome) * 100 : 0;
+  const effectiveTaxRate = totalGrossIncome > 0 ? (totalTaxPaid / totalGrossIncome) * 100 : 0;
+
+  // Month progress for the hero progress bar.
+  const today = new Date();
+  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const monthProgress = today.getDate() / daysInMonth;
+
+  // Snapshot-derived deltas and sparkline (snapshots arrive newest-first).
+  const latestSnap = snapshots[0];
+  const assetSparkline = [...snapshots]
+    .reverse()
+    .map((s) => s.totalAssetValue)
+    .concat(summary.totalAssetValueINR);
+  const netWorthDelta = latestSnap ? pctChange(summary.totalAssetValueINR, latestSnap.totalAssetValue) : undefined;
+  const savedDelta = latestSnap ? pctChange(summary.remaining, latestSnap.remaining) : undefined;
+  const investedDelta = latestSnap
+    ? pctChange(totalInvested, latestSnap.totalSIPs + latestSnap.totalVoluntaryInvestments)
+    : undefined;
+
   const allocationData = [
     { name: 'Tax', value: totalTaxPaid, color: categoryColors.tax },
     { name: 'Expenses', value: summary.totalExpenses, color: categoryColors.expenses },
-    { name: 'Daily Expenses', value: summary.dailyExpensesThisMonth || 0, color: '#ef5350' },
+    { name: 'Daily', value: summary.dailyExpensesThisMonth || 0, color: '#ef5350' },
     { name: 'SIPs', value: summary.totalSIPs, color: categoryColors.sip },
     { name: 'Investments', value: summary.totalVoluntaryInvestments, color: categoryColors.voluntary },
-    { name: 'Remaining', value: summary.remaining, color: categoryColors.remaining },
+    { name: 'Remaining', value: Math.max(summary.remaining, 0), color: categoryColors.remaining },
   ].filter((item) => item.value > 0);
 
   const getIncomeTypeLabel = (type: string) => {
@@ -135,137 +148,126 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const hasDebt = summary.totalDebt > 0;
+  const firstName = (user?.displayName || user?.email || 'there').split(' ')[0].split('@')[0];
+
   return (
     <Box>
-      <Typography variant="h4" fontWeight={700} gutterBottom>
-        Dashboard
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Overview of your financial status
-      </Typography>
+      <HeroHeader
+        displayName={firstName}
+        remaining={summary.remaining}
+        savingsRate={savingsRate}
+        monthProgress={monthProgress}
+      />
 
-      {/* Summary Cards */}
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="Gross Income"
-            amount={totalGrossIncome}
-            color={categoryColors.income}
-            icon={<AccountBalance />}
-            compact
+      {/* Headline stat cards */}
+      <Grid container spacing={2} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 6, md: 3 }}>
+          <StatCard
+            title="Net Worth"
+            value={compactINR(summary.netWorth)}
+            color={categoryColors.assets}
+            icon={<AccountBalanceWallet fontSize="small" />}
+            delta={netWorthDelta}
+            subtitle={hasDebt ? `after ${compactINR(summary.totalDebt)} debt` : `${data.assets.length} assets`}
+            sparkline={assetSparkline}
+            onClick={() => navigate('/assets')}
+            index={0}
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="Tax Paid"
-            amount={totalTaxPaid}
-            color={categoryColors.tax}
-            icon={<Money />}
-            compact
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="Expenses"
-            amount={summary.totalExpenses}
-            color={categoryColors.expenses}
-            icon={<Receipt />}
-            compact
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="SIPs"
-            amount={summary.totalSIPs}
-            color={categoryColors.sip}
-            icon={<TrendingUp />}
-            compact
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="Investments"
-            amount={summary.totalVoluntaryInvestments}
-            color={categoryColors.voluntary}
-            icon={<Savings />}
-            compact
-          />
-        </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="Remaining"
-            amount={summary.remaining}
+        <Grid size={{ xs: 6, md: 3 }}>
+          <StatCard
+            title="Saved This Month"
+            value={compactINR(summary.remaining)}
             color={categoryColors.remaining}
-            icon={<AttachMoney />}
-            compact
+            icon={<Savings fontSize="small" />}
+            delta={savedDelta}
+            subtitle={`${savingsRate.toFixed(0)}% of net income`}
+            index={1}
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
-          <SummaryCard
-            title="Daily (Today)"
-            amount={summary.dailyExpensesToday || 0}
-            color="#ff7043"
-            icon={<ShoppingCart />}
-            compact
+        <Grid size={{ xs: 6, md: 3 }}>
+          <StatCard
+            title="Invested / Month"
+            value={compactINR(totalInvested)}
+            color={categoryColors.sip}
+            icon={<TrendingUp fontSize="small" />}
+            delta={investedDelta}
+            subtitle="SIPs + voluntary"
+            onClick={() => navigate('/investments')}
+            index={2}
           />
         </Grid>
-        <Grid size={{ xs: 6, sm: 4, md: 2 }}>
+        <Grid size={{ xs: 6, md: 3 }}>
+          {hasDebt ? (
+            <StatCard
+              title="Debt Outstanding"
+              value={compactINR(summary.totalDebt)}
+              color={categoryColors.expenses}
+              icon={<CreditCard fontSize="small" />}
+              subtitle={`${compactINR(summary.monthlyDebtPayment)}/mo`}
+              onClick={() => navigate('/debts')}
+              index={3}
+            />
+          ) : (
+            <StatCard
+              title="Net Income"
+              value={compactINR(summary.totalIncome)}
+              color={categoryColors.income}
+              icon={<Money fontSize="small" />}
+              subtitle="after tax, monthly"
+              onClick={() => navigate('/income')}
+              index={3}
+            />
+          )}
+        </Grid>
+      </Grid>
+
+      {/* Secondary quieter stats */}
+      <Grid container spacing={2} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <SummaryCard title="Gross Income" amount={totalGrossIncome} color={categoryColors.income} compact onClick={() => navigate('/income')} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <SummaryCard title="Tax Paid" amount={totalTaxPaid} color={categoryColors.tax} icon={<Money />} compact />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
+          <SummaryCard title="Fixed Expenses" amount={summary.totalExpenses} color={categoryColors.expenses} icon={<Receipt />} compact onClick={() => navigate('/expenses')} />
+        </Grid>
+        <Grid size={{ xs: 6, sm: 3 }}>
           <SummaryCard
-            title="Daily (Month)"
+            title="Daily Spend"
             amount={summary.dailyExpensesThisMonth || 0}
             color="#ef5350"
             icon={<ShoppingCart />}
             compact
+            subtitle={`${compactINR(summary.dailyExpensesToday || 0)} today`}
+            onClick={() => navigate('/daily-expenses')}
           />
         </Grid>
       </Grid>
 
-      {/* Charts Section */}
-      <Grid container spacing={3}>
-        {/* Income Allocation Pie Chart */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3, height: 'auto', minHeight: 420 }}>
-            <Typography variant="h6" fontWeight={600} gutterBottom>
-              Monthly Allocation (from Gross Income)
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              How your gross income of {formatCurrency(totalGrossIncome)} is distributed
-            </Typography>
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={allocationData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  label={({ percent }) => `${((percent ?? 0) * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {allocationData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip
-                  formatter={(value) => formatCurrency(value as number)}
-                />
-                <Legend
-                  layout="horizontal"
-                  verticalAlign="bottom"
-                  align="center"
-                  wrapperStyle={{ paddingTop: 20 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </Paper>
+      {/* Trend + upcoming */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <TrendChart snapshots={snapshots} />
         </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <UpcomingPanel expenses={data.expenses} debts={data.debts} />
+        </Grid>
+      </Grid>
 
-        {/* Income Sources with Tax */}
-        <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3, height: 420, overflow: 'auto' }}>
+      {/* Allocation + income sources */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12, md: 8 }}>
+          <AllocationBar
+            title="Where Your Income Goes"
+            subtitle={`How your gross income of ${formatCurrency(totalGrossIncome)} is distributed each month`}
+            data={allocationData}
+          />
+        </Grid>
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Paper sx={{ p: 3, height: '100%', maxHeight: 420, overflow: 'auto' }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               Income Sources
             </Typography>
@@ -276,11 +278,7 @@ const Dashboard: React.FC = () => {
               {data.incomes.map((income) => (
                 <ListItem
                   key={income._id}
-                  sx={{
-                    py: 1.5,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                  }}
+                  sx={{ py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}
                 >
                   <ListItemText
                     primary={
@@ -339,125 +337,88 @@ const Dashboard: React.FC = () => {
                 </ListItem>
               ))}
             </List>
-            {/* Tax Summary */}
-            {totalTaxPaid > 0 && (
-              <Box sx={{ mt: 2, p: 2, backgroundColor: `${categoryColors.tax}15`, borderRadius: 1 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Monthly Tax
-                  </Typography>
-                  <Typography variant="h6" fontWeight={700} sx={{ color: categoryColors.tax }}>
-                    {formatCurrency(totalTaxPaid)}
-                  </Typography>
-                </Box>
-                <Typography variant="caption" color="text.secondary">
-                  Effective tax rate: {((totalTaxPaid / totalGrossIncome) * 100).toFixed(1)}%
-                </Typography>
-              </Box>
-            )}
           </Paper>
         </Grid>
+      </Grid>
 
-        {/* Quick Stats */}
+      {/* Quick stats + assets & debt */}
+      <Grid container spacing={3}>
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
               Quick Stats
             </Typography>
             <Box sx={{ mt: 2 }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  py: 1.5,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">Effective Tax Rate</Typography>
-                <Typography fontWeight={600} sx={{ color: categoryColors.tax }}>
-                  {totalGrossIncome > 0 ? ((totalTaxPaid / totalGrossIncome) * 100).toFixed(1) : 0}%
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  py: 1.5,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">Savings Rate (of Net)</Typography>
-                <Typography fontWeight={600} color="success.main">
-                  {summary.totalIncome > 0 ? ((summary.remaining / summary.totalIncome) * 100).toFixed(1) : 0}%
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  py: 1.5,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">Investment Rate (of Net)</Typography>
-                <Typography fontWeight={600} color="info.main">
-                  {summary.totalIncome > 0
-                    ? (((summary.totalSIPs + summary.totalVoluntaryInvestments) / summary.totalIncome) * 100).toFixed(1)
-                    : 0}%
-                </Typography>
-              </Box>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  py: 1.5,
-                  borderBottom: '1px solid',
-                  borderColor: 'divider',
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">Income Sources</Typography>
-                <Typography fontWeight={600}>{data.incomes.length}</Typography>
-              </Box>
-              <Box
-                sx={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  py: 1.5,
-                }}
-              >
-                <Typography variant="body2" color="text.secondary">Active Investments</Typography>
-                <Typography fontWeight={600}>{data.investments.length}</Typography>
-              </Box>
+              {[
+                { label: 'Effective Tax Rate', value: `${effectiveTaxRate.toFixed(1)}%`, color: categoryColors.tax },
+                { label: 'Savings Rate (of Net)', value: `${savingsRate.toFixed(1)}%`, color: 'success.main' },
+                { label: 'Investment Rate (of Net)', value: `${investmentRate.toFixed(1)}%`, color: 'info.main' },
+                { label: 'Income Sources', value: `${data.incomes.length}`, color: 'text.primary' },
+                { label: 'Active Investments', value: `${data.investments.length}`, color: 'text.primary' },
+              ].map((row, idx, arr) => (
+                <Box
+                  key={row.label}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    py: 1.5,
+                    borderBottom: idx < arr.length - 1 ? '1px solid' : 'none',
+                    borderColor: 'divider',
+                  }}
+                >
+                  <Typography variant="body2" color="text.secondary">{row.label}</Typography>
+                  <Typography fontWeight={600} sx={{ color: row.color }}>{row.value}</Typography>
+                </Box>
+              ))}
             </Box>
           </Paper>
         </Grid>
 
-        {/* Assets Summary */}
         <Grid size={{ xs: 12, md: 6 }}>
-          <Paper sx={{ p: 3 }}>
+          <Paper sx={{ p: 3, height: '100%' }}>
             <Typography variant="h6" fontWeight={600} gutterBottom>
-              Assets Portfolio
+              Assets & Net Worth
             </Typography>
-            <Box sx={{ display: 'flex', gap: 3, mt: 2 }}>
+            <Box sx={{ display: 'flex', gap: 4, mt: 2, flexWrap: 'wrap' }}>
               <Box>
-                <Typography variant="body2" color="text.secondary">Total Value (INR)</Typography>
+                <Typography variant="body2" color="text.secondary">Assets (INR)</Typography>
                 <Typography variant="h5" fontWeight={700} color="warning.main">
                   {formatCurrency(summary.totalAssetValueINR)}
                 </Typography>
               </Box>
               <Box>
-                <Typography variant="body2" color="text.secondary">Total Value (USD)</Typography>
+                <Typography variant="body2" color="text.secondary">Assets (USD)</Typography>
                 <Typography variant="h5" fontWeight={700} color="primary.main">
                   {formatCurrency(summary.totalAssetValueUSD, 'USD')}
                 </Typography>
               </Box>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
-              {data.assets.length} assets tracked
-            </Typography>
+            <Box
+              sx={{
+                mt: 3,
+                p: 2,
+                borderRadius: 2,
+                backgroundColor: (theme) =>
+                  summary.netWorth >= 0 ? `${theme.palette.success.main}12` : `${theme.palette.error.main}12`,
+              }}
+            >
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">Net Worth</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {data.assets.length} assets
+                    {summary.totalDebt > 0 ? ` · ${formatCurrency(summary.totalDebt)} debt` : ''}
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="h5"
+                  fontWeight={700}
+                  color={summary.netWorth >= 0 ? 'success.main' : 'error.main'}
+                >
+                  {formatCurrency(summary.netWorth)}
+                </Typography>
+              </Box>
+            </Box>
           </Paper>
         </Grid>
       </Grid>

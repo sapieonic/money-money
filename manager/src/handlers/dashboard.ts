@@ -5,6 +5,7 @@ import { Expense } from '../models/Expense';
 import { DailyExpense } from '../models/DailyExpense';
 import { Investment } from '../models/Investment';
 import { Asset } from '../models/Asset';
+import { Debt } from '../models/Debt';
 import { MonthlyLedger } from '../models/MonthlyLedger';
 import { Snapshot } from '../models/Snapshot';
 import { User } from '../models/User';
@@ -28,11 +29,12 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
     // Fetch all active data in parallel
-    const [incomes, expenses, investments, assets, user, ledger, dailyExpensesTodayResult, dailyExpensesMonthResult] = await Promise.all([
+    const [incomes, expenses, investments, assets, debts, user, ledger, dailyExpensesTodayResult, dailyExpensesMonthResult, dailyExpenseBreakdownResult] = await Promise.all([
       Income.find({ userId, isActive: true }),
       Expense.find({ userId, isActive: true }),
       Investment.find({ userId, status: 'active' }),
       Asset.find({ userId, isSold: false }),
+      Debt.find({ userId, isActive: true, status: 'active' }),
       User.findOne({ firebaseUid: userId }),
       MonthlyLedger.findOne({ userId, month: currentMonth }),
       DailyExpense.aggregate([
@@ -42,6 +44,11 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       DailyExpense.aggregate([
         { $match: { userId, isActive: true, date: { $gte: startOfMonth } } },
         { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]),
+      DailyExpense.aggregate([
+        { $match: { userId, isActive: true, date: { $gte: startOfMonth } } },
+        { $group: { _id: '$category', total: { $sum: '$amount' } } },
+        { $sort: { total: -1 } },
       ]),
     ]);
 
@@ -74,10 +81,22 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
     const totalAssetValueINR = assets.reduce((sum, asset) => sum + asset.currentValueINR, 0);
     const totalAssetValueUSD = assets.reduce((sum, asset) => sum + (asset.currentValueUSD || 0), 0);
 
+    const totalDebt = debts.reduce((sum, debt) => sum + debt.currentBalance, 0);
+    const monthlyDebtPayment = debts.reduce(
+      (sum, debt) => sum + debt.monthlyPayment + (debt.additionalPayment || 0),
+      0
+    );
+    const netWorth = totalAssetValueINR - totalDebt;
+
     const dailyExpensesToday = dailyExpensesTodayResult[0]?.total || 0;
     const dailyExpensesThisMonth = dailyExpensesMonthResult[0]?.total || 0;
 
     const remaining = totalIncome - totalExpenses - totalSIPs - totalVoluntaryInvestments - dailyExpensesThisMonth;
+
+    const dailyExpenseBreakdown = dailyExpenseBreakdownResult.map((entry) => ({
+      category: entry._id,
+      total: entry.total,
+    }));
 
     const summary: DashboardSummary = {
       totalIncome,
@@ -89,6 +108,9 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       totalAssetValueUSD,
       dailyExpensesToday,
       dailyExpensesThisMonth,
+      totalDebt,
+      monthlyDebtPayment,
+      netWorth,
     };
 
     // Return summary along with detailed data (use ledger data when available)
@@ -98,6 +120,8 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       expenses: effectiveExpenses,
       investments: effectiveInvestments,
       assets,
+      debts,
+      dailyExpenseBreakdown,
     });
   } catch (err) {
     logger.error('Error fetching dashboard', { error: String(err) });

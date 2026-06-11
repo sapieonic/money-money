@@ -222,6 +222,14 @@ export interface DashboardSummary {
   totalAssetValueUSD: number;
   dailyExpensesToday: number;
   dailyExpensesThisMonth: number;
+  totalDebt: number;
+  monthlyDebtPayment: number;
+  netWorth: number;
+}
+
+export interface DailyExpenseCategoryBreakdown {
+  category: DailyExpenseCategory;
+  total: number;
 }
 
 export interface DashboardData {
@@ -230,6 +238,8 @@ export interface DashboardData {
   expenses: Expense[];
   investments: Investment[];
   assets: Asset[];
+  debts: Debt[];
+  dailyExpenseBreakdown: DailyExpenseCategoryBreakdown[];
 }
 
 export interface Snapshot {
