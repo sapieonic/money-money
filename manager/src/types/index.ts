@@ -67,4 +67,12 @@ export interface DashboardSummary {
   totalAssetValueUSD: number;
   dailyExpensesToday: number;
   dailyExpensesThisMonth: number;
+  totalDebt: number;
+  monthlyDebtPayment: number;
+  netWorth: number;
+}
+
+export interface DailyExpenseCategoryBreakdown {
+  category: string;
+  total: number;
 }
