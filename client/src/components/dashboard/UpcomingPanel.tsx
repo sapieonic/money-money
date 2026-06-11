@@ -53,7 +53,7 @@ const UpcomingPanel: React.FC<UpcomingPanelProps> = ({ expenses, debts }) => {
         kind: 'expense' as const,
       })),
     ...debts
-      .filter((d) => d.dueDate)
+      .filter((d) => d.status === 'active' && d.dueDate)
       .map((d) => ({
         id: d._id,
         label: d.name,

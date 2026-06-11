@@ -49,7 +49,8 @@ const pctChange = (current: number, previous: number): number | undefined => {
   return ((current - previous) / Math.abs(previous)) * 100;
 };
 
-const compactINR = (amount: number) => `₹${formatCompactNumber(amount)}`;
+const compactINR = (amount: number) =>
+  `${amount < 0 ? '-' : ''}₹${formatCompactNumber(Math.abs(amount))}`;
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -90,6 +91,12 @@ const Dashboard: React.FC = () => {
 
   const { summary } = data;
 
+  // Tolerate responses from a backend that predates the debt/net-worth fields.
+  const debts = data.debts ?? [];
+  const totalDebt = summary.totalDebt ?? 0;
+  const monthlyDebtPayment = summary.monthlyDebtPayment ?? 0;
+  const netWorth = summary.netWorth ?? summary.totalAssetValueINR - totalDebt;
+
   // RSU income may be stored in USD; convert to INR for totals.
   const getIncomeINR = (income: Income) => {
     if (income.type === 'rsu_vesting' && income.currency === 'USD') {
@@ -117,15 +124,19 @@ const Dashboard: React.FC = () => {
   const monthProgress = today.getDate() / daysInMonth;
 
   // Snapshot-derived deltas and sparkline (snapshots arrive newest-first).
-  const latestSnap = snapshots[0];
+  // If the newest snapshot is for the current month, compare against the one before it.
+  const currentMonthKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const baselineSnap = snapshots[0]?.month === currentMonthKey ? snapshots[1] : snapshots[0];
   const assetSparkline = [...snapshots]
     .reverse()
     .map((s) => s.totalAssetValue)
     .concat(summary.totalAssetValueINR);
-  const netWorthDelta = latestSnap ? pctChange(summary.totalAssetValueINR, latestSnap.totalAssetValue) : undefined;
-  const savedDelta = latestSnap ? pctChange(summary.remaining, latestSnap.remaining) : undefined;
-  const investedDelta = latestSnap
-    ? pctChange(totalInvested, latestSnap.totalSIPs + latestSnap.totalVoluntaryInvestments)
+  const netWorthDelta = baselineSnap
+    ? pctChange(summary.totalAssetValueINR, baselineSnap.totalAssetValue)
+    : undefined;
+  const savedDelta = baselineSnap ? pctChange(summary.remaining, baselineSnap.remaining) : undefined;
+  const investedDelta = baselineSnap
+    ? pctChange(totalInvested, baselineSnap.totalSIPs + baselineSnap.totalVoluntaryInvestments)
     : undefined;
 
   const allocationData = [
@@ -148,7 +159,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const hasDebt = summary.totalDebt > 0;
+  const hasDebt = totalDebt > 0;
   const firstName = (user?.displayName || user?.email || 'there').split(' ')[0].split('@')[0];
 
   return (
@@ -165,11 +176,11 @@ const Dashboard: React.FC = () => {
         <Grid size={{ xs: 6, md: 3 }}>
           <StatCard
             title="Net Worth"
-            value={compactINR(summary.netWorth)}
+            value={compactINR(netWorth)}
             color={categoryColors.assets}
             icon={<AccountBalanceWallet fontSize="small" />}
             delta={netWorthDelta}
-            subtitle={hasDebt ? `after ${compactINR(summary.totalDebt)} debt` : `${data.assets.length} assets`}
+            subtitle={hasDebt ? `after ${compactINR(totalDebt)} debt` : `${data.assets.length} assets`}
             sparkline={assetSparkline}
             onClick={() => navigate('/assets')}
             index={0}
@@ -202,10 +213,10 @@ const Dashboard: React.FC = () => {
           {hasDebt ? (
             <StatCard
               title="Debt Outstanding"
-              value={compactINR(summary.totalDebt)}
+              value={compactINR(totalDebt)}
               color={categoryColors.expenses}
               icon={<CreditCard fontSize="small" />}
-              subtitle={`${compactINR(summary.monthlyDebtPayment)}/mo`}
+              subtitle={`${compactINR(monthlyDebtPayment)}/mo`}
               onClick={() => navigate('/debts')}
               index={3}
             />
@@ -253,7 +264,7 @@ const Dashboard: React.FC = () => {
           <TrendChart snapshots={snapshots} />
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
-          <UpcomingPanel expenses={data.expenses} debts={data.debts} />
+          <UpcomingPanel expenses={data.expenses} debts={debts} />
         </Grid>
       </Grid>
 
@@ -399,7 +410,7 @@ const Dashboard: React.FC = () => {
                 p: 2,
                 borderRadius: 2,
                 backgroundColor: (theme) =>
-                  summary.netWorth >= 0 ? `${theme.palette.success.main}12` : `${theme.palette.error.main}12`,
+                  netWorth >= 0 ? `${theme.palette.success.main}12` : `${theme.palette.error.main}12`,
               }}
             >
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -407,15 +418,15 @@ const Dashboard: React.FC = () => {
                   <Typography variant="body2" color="text.secondary">Net Worth</Typography>
                   <Typography variant="caption" color="text.secondary">
                     {data.assets.length} assets
-                    {summary.totalDebt > 0 ? ` · ${formatCurrency(summary.totalDebt)} debt` : ''}
+                    {totalDebt > 0 ? ` · ${formatCurrency(totalDebt)} debt` : ''}
                   </Typography>
                 </Box>
                 <Typography
                   variant="h5"
                   fontWeight={700}
-                  color={summary.netWorth >= 0 ? 'success.main' : 'error.main'}
+                  color={netWorth >= 0 ? 'success.main' : 'error.main'}
                 >
-                  {formatCurrency(summary.netWorth)}
+                  {formatCurrency(netWorth)}
                 </Typography>
               </Box>
             </Box>

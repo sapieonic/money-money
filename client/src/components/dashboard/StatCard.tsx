@@ -36,6 +36,7 @@ const StatCard: React.FC<StatCardProps> = ({
   const hasDelta = delta !== undefined && Number.isFinite(delta);
   const isGood = hasDelta ? (invertDelta ? delta! <= 0 : delta! >= 0) : true;
   const deltaColor = isGood ? 'success.main' : 'error.main';
+  const gradientId = `spark-${title.replace(/[^a-zA-Z0-9]/g, '')}`;
 
   return (
     <Card
@@ -107,7 +108,6 @@ const StatCard: React.FC<StatCardProps> = ({
                 fontWeight: 600,
                 fontSize: '0.72rem',
                 color: deltaColor,
-                backgroundColor: isGood ? 'success.main' : 'error.main',
                 bgcolor: (theme) =>
                   isGood ? `${theme.palette.success.main}1A` : `${theme.palette.error.main}1A`,
                 '& .MuiChip-icon': { color: deltaColor },
@@ -126,7 +126,7 @@ const StatCard: React.FC<StatCardProps> = ({
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={sparkline.map((v) => ({ v }))}>
                 <defs>
-                  <linearGradient id={`spark-${title}`} x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={color} stopOpacity={0.35} />
                     <stop offset="100%" stopColor={color} stopOpacity={0} />
                   </linearGradient>
@@ -136,7 +136,7 @@ const StatCard: React.FC<StatCardProps> = ({
                   dataKey="v"
                   stroke={color}
                   strokeWidth={2}
-                  fill={`url(#spark-${title})`}
+                  fill={`url(#${gradientId})`}
                   isAnimationActive={false}
                 />
               </AreaChart>

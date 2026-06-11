@@ -34,7 +34,7 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
       Expense.find({ userId, isActive: true }),
       Investment.find({ userId, status: 'active' }),
       Asset.find({ userId, isSold: false }),
-      Debt.find({ userId, isActive: true, status: 'active' }),
+      Debt.find({ userId, isActive: true, status: { $in: ['active', 'paused'] } }),
       User.findOne({ firebaseUid: userId }),
       MonthlyLedger.findOne({ userId, month: currentMonth }),
       DailyExpense.aggregate([
@@ -82,10 +82,10 @@ export const get = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewa
     const totalAssetValueUSD = assets.reduce((sum, asset) => sum + (asset.currentValueUSD || 0), 0);
 
     const totalDebt = debts.reduce((sum, debt) => sum + debt.currentBalance, 0);
-    const monthlyDebtPayment = debts.reduce(
-      (sum, debt) => sum + debt.monthlyPayment + (debt.additionalPayment || 0),
-      0
-    );
+    // Paused debts still owe a balance but have no current monthly obligation.
+    const monthlyDebtPayment = debts
+      .filter((debt) => debt.status === 'active')
+      .reduce((sum, debt) => sum + debt.monthlyPayment + (debt.additionalPayment || 0), 0);
     const netWorth = totalAssetValueINR - totalDebt;
 
     const dailyExpensesToday = dailyExpensesTodayResult[0]?.total || 0;
