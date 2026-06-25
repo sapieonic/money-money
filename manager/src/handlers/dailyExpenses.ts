@@ -135,6 +135,103 @@ export const getSummary = withAuth(async (event: AuthenticatedEvent): Promise<AP
   }
 });
 
+// GET /api/daily-expenses/projection - Year-end spend projection from tracked daily spending
+export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
+  try {
+    await connectToDatabase();
+
+    const now = new Date();
+    // Work entirely in UTC so the $month bucketing below (which is always UTC
+    // unless a timezone is given) stays consistent with currentMonth/daysElapsed
+    // regardless of the host timezone. In the deployed Lambda the host is UTC
+    // anyway; this also keeps local dev (e.g. serverless-offline in IST) correct.
+    const year = now.getUTCFullYear();
+    const startOfYear = new Date(Date.UTC(year, 0, 1));
+
+    // Sum tracked daily spend bucketed by calendar month (UTC) for the current
+    // year, up to now — future-dated entries are not "spent so far" and must
+    // not count toward the cumulative total or the run-rate.
+    const monthlyAgg = await DailyExpense.aggregate([
+      {
+        $match: {
+          userId: event.userId,
+          isActive: true,
+          date: { $gte: startOfYear, $lte: now },
+        },
+      },
+      {
+        $group: {
+          _id: { $month: '$date' },
+          total: { $sum: '$amount' },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    const monthMap = new Map<number, number>();
+    monthlyAgg.forEach((m) => monthMap.set(m._id, m.total));
+
+    const currentMonth = now.getUTCMonth() + 1;
+
+    // Cumulative actual spend through each elapsed month (Jan..current).
+    const monthly: { month: number; spend: number; cumulative: number }[] = [];
+    let cumulative = 0;
+    for (let m = 1; m <= currentMonth; m += 1) {
+      const spend = monthMap.get(m) || 0;
+      cumulative += spend;
+      monthly.push({ month: m, spend, cumulative });
+    }
+    const spentSoFar = cumulative;
+
+    const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+    const daysInYear = isLeap ? 366 : 365;
+    // Day-of-year, counting today as day 1, so the run-rate denominator pairs
+    // with month-to-date spend that already includes today.
+    const daysElapsed = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000) + 1;
+    const daysRemaining = Math.max(0, daysInYear - daysElapsed);
+    const dailyRunRate = daysElapsed > 0 ? spentSoFar / daysElapsed : 0;
+
+    // Widen the low/high band by how volatile completed months have been
+    // (coefficient of variation), clamped to a sensible range. Only months
+    // that actually had spend count — leading months before the user started
+    // tracking would otherwise skew volatility upward.
+    const completed = monthly
+      .filter((m) => m.month < currentMonth && m.spend > 0)
+      .map((m) => m.spend);
+    let cov = 0.15;
+    if (completed.length >= 2) {
+      const mean = completed.reduce((a, b) => a + b, 0) / completed.length;
+      if (mean > 0) {
+        const variance =
+          completed.reduce((a, b) => a + (b - mean) ** 2, 0) / completed.length;
+        cov = Math.sqrt(variance) / mean;
+      }
+    }
+    cov = Math.min(0.3, Math.max(0.08, cov));
+
+    const projectRemainder = (rate: number) => spentSoFar + rate * daysRemaining;
+
+    return success({
+      year,
+      currentMonth,
+      daysElapsed,
+      daysInYear,
+      daysRemaining,
+      spentSoFar,
+      dailyRunRate,
+      monthly,
+      projection: {
+        low: projectRemainder(dailyRunRate * (1 - cov)),
+        mid: projectRemainder(dailyRunRate),
+        high: projectRemainder(dailyRunRate * (1 + cov)),
+      },
+    });
+  } catch (err) {
+    logger.error('Error building spend projection', { error: String(err) });
+    return error('Failed to build spend projection');
+  }
+});
+
 // POST /api/daily-expenses - Create new daily expense
 export const create = withAuth(async (event: AuthenticatedEvent): Promise<APIGatewayProxyResultV2> => {
   try {

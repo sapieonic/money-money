@@ -142,6 +142,13 @@ functions:
           path: /api/daily-expenses/summary
           method: get
 
+  getDailyExpensesProjection:
+    handler: src/handlers/dailyExpenses.getProjection
+    events:
+      - httpApi:
+          path: /api/daily-expenses/projection
+          method: get
+
   createDailyExpense:
     handler: src/handlers/dailyExpenses.create
     events:

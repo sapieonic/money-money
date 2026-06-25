@@ -25,6 +25,7 @@ import SummaryCard from '../components/common/SummaryCard';
 import StatCard from '../components/dashboard/StatCard';
 import HeroHeader from '../components/dashboard/HeroHeader';
 import TrendChart from '../components/dashboard/TrendChart';
+import SpendProjectionCard from '../components/dashboard/SpendProjectionCard';
 import AllocationBar from '../components/dashboard/AllocationBar';
 import UpcomingPanel from '../components/dashboard/UpcomingPanel';
 import DashboardSkeleton from '../components/dashboard/DashboardSkeleton';
@@ -265,6 +266,13 @@ const Dashboard: React.FC = () => {
         </Grid>
         <Grid size={{ xs: 12, md: 4 }}>
           <UpcomingPanel expenses={data.expenses} debts={debts} />
+        </Grid>
+      </Grid>
+
+      {/* Year-end spend projection */}
+      <Grid container spacing={3} sx={{ mb: 3 }}>
+        <Grid size={{ xs: 12 }}>
+          <SpendProjectionCard />
         </Grid>
       </Grid>
 

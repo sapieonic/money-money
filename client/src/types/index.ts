@@ -71,6 +71,28 @@ export interface DailyExpenseSummary {
   }[];
 }
 
+export interface SpendProjectionMonth {
+  month: number;
+  spend: number;
+  cumulative: number;
+}
+
+export interface SpendProjection {
+  year: number;
+  currentMonth: number;
+  daysElapsed: number;
+  daysInYear: number;
+  daysRemaining: number;
+  spentSoFar: number;
+  dailyRunRate: number;
+  monthly: SpendProjectionMonth[];
+  projection: {
+    low: number;
+    mid: number;
+    high: number;
+  };
+}
+
 export interface Investment {
   _id: string;
   userId: string;
