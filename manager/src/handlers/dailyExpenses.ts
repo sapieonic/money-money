@@ -141,19 +141,22 @@ export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise
     await connectToDatabase();
 
     const now = new Date();
-    const year = now.getFullYear();
-    const startOfYear = new Date(year, 0, 1);
-    const startOfNextYear = new Date(year + 1, 0, 1);
+    // Work entirely in UTC so the $month bucketing below (which is always UTC
+    // unless a timezone is given) stays consistent with currentMonth/daysElapsed
+    // regardless of the host timezone. In the deployed Lambda the host is UTC
+    // anyway; this also keeps local dev (e.g. serverless-offline in IST) correct.
+    const year = now.getUTCFullYear();
+    const startOfYear = new Date(Date.UTC(year, 0, 1));
 
-    // Sum tracked daily spend bucketed by calendar month for the current year.
-    // Months are bucketed in UTC to match how the rest of the app derives
-    // "now"/"this month" from a naive `new Date()`.
+    // Sum tracked daily spend bucketed by calendar month (UTC) for the current
+    // year, up to now — future-dated entries are not "spent so far" and must
+    // not count toward the cumulative total or the run-rate.
     const monthlyAgg = await DailyExpense.aggregate([
       {
         $match: {
           userId: event.userId,
           isActive: true,
-          date: { $gte: startOfYear, $lt: startOfNextYear },
+          date: { $gte: startOfYear, $lte: now },
         },
       },
       {
@@ -168,7 +171,7 @@ export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise
     const monthMap = new Map<number, number>();
     monthlyAgg.forEach((m) => monthMap.set(m._id, m.total));
 
-    const currentMonth = now.getMonth() + 1;
+    const currentMonth = now.getUTCMonth() + 1;
 
     // Cumulative actual spend through each elapsed month (Jan..current).
     const monthly: { month: number; spend: number; cumulative: number }[] = [];
@@ -182,6 +185,8 @@ export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise
 
     const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
     const daysInYear = isLeap ? 366 : 365;
+    // Day-of-year, counting today as day 1, so the run-rate denominator pairs
+    // with month-to-date spend that already includes today.
     const daysElapsed = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000) + 1;
     const daysRemaining = Math.max(0, daysInYear - daysElapsed);
     const dailyRunRate = daysElapsed > 0 ? spentSoFar / daysElapsed : 0;

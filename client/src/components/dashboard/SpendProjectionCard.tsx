@@ -97,6 +97,11 @@ const SpendProjectionCard: React.FC = () => {
 
   const { year, currentMonth, spentSoFar, dailyRunRate, daysElapsed, daysInYear, daysRemaining, projection } = data;
 
+  // A run-rate extrapolated from only a handful of days is noise, not a
+  // forecast — hold the projection back until enough of the year has elapsed.
+  const MIN_DAYS_FOR_PROJECTION = 14;
+  const projectionReady = daysElapsed >= MIN_DAYS_FOR_PROJECTION;
+
   const cumulativeByMonth = new Map(data.monthly.map((m) => [m.month, m.cumulative]));
 
   type Point = {
@@ -146,7 +151,9 @@ const SpendProjectionCard: React.FC = () => {
         Spend Projection
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Cumulative tracked spend in {year}: actual (solid) and projected to Dec 31 (dashed)
+        {projectionReady
+          ? `Cumulative tracked spend in ${year}: actual (solid) and projected to Dec 31 (dashed)`
+          : `Cumulative tracked spend in ${year} — projection appears once you have ~2 weeks of data`}
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
@@ -156,8 +163,8 @@ const SpendProjectionCard: React.FC = () => {
         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
         <Stat
           label="Projected total"
-          value={fullINR(projection.mid)}
-          caption="mid case, Dec 31"
+          value={projectionReady ? fullINR(projection.mid) : '—'}
+          caption={projectionReady ? 'mid case, Dec 31' : 'needs ~2 weeks of data'}
           color={categoryColors.voluntary}
         />
       </Box>
@@ -201,36 +208,42 @@ const SpendProjectionCard: React.FC = () => {
             connectNulls
             dot={false}
           />
-          <Line
-            type="monotone"
-            dataKey="low"
-            name="Low"
-            stroke={categoryColors.income}
-            strokeWidth={2}
-            strokeDasharray="6 5"
-            connectNulls
-            dot={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="mid"
-            name="Mid"
-            stroke={categoryColors.voluntary}
-            strokeWidth={2}
-            strokeDasharray="6 5"
-            connectNulls
-            dot={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="high"
-            name="High"
-            stroke={categoryColors.assets}
-            strokeWidth={2}
-            strokeDasharray="6 5"
-            connectNulls
-            dot={false}
-          />
+          {projectionReady && (
+            <Line
+              type="monotone"
+              dataKey="low"
+              name="Low"
+              stroke={categoryColors.income}
+              strokeWidth={2}
+              strokeDasharray="6 5"
+              connectNulls
+              dot={false}
+            />
+          )}
+          {projectionReady && (
+            <Line
+              type="monotone"
+              dataKey="mid"
+              name="Mid"
+              stroke={categoryColors.voluntary}
+              strokeWidth={2}
+              strokeDasharray="6 5"
+              connectNulls
+              dot={false}
+            />
+          )}
+          {projectionReady && (
+            <Line
+              type="monotone"
+              dataKey="high"
+              name="High"
+              stroke={categoryColors.assets}
+              strokeWidth={2}
+              strokeDasharray="6 5"
+              connectNulls
+              dot={false}
+            />
+          )}
         </ComposedChart>
       </ResponsiveContainer>
     </Paper>
