@@ -145,7 +145,9 @@ export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise
     const startOfYear = new Date(year, 0, 1);
     const startOfNextYear = new Date(year + 1, 0, 1);
 
-    // Sum tracked daily spend bucketed by calendar month (IST) for the current year.
+    // Sum tracked daily spend bucketed by calendar month for the current year.
+    // Months are bucketed in UTC to match how the rest of the app derives
+    // "now"/"this month" from a naive `new Date()`.
     const monthlyAgg = await DailyExpense.aggregate([
       {
         $match: {
@@ -156,7 +158,7 @@ export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise
       },
       {
         $group: {
-          _id: { $month: { date: '$date', timezone: 'Asia/Kolkata' } },
+          _id: { $month: '$date' },
           total: { $sum: '$amount' },
         },
       },
@@ -185,8 +187,12 @@ export const getProjection = withAuth(async (event: AuthenticatedEvent): Promise
     const dailyRunRate = daysElapsed > 0 ? spentSoFar / daysElapsed : 0;
 
     // Widen the low/high band by how volatile completed months have been
-    // (coefficient of variation), clamped to a sensible range.
-    const completed = monthly.filter((m) => m.month < currentMonth).map((m) => m.spend);
+    // (coefficient of variation), clamped to a sensible range. Only months
+    // that actually had spend count — leading months before the user started
+    // tracking would otherwise skew volatility upward.
+    const completed = monthly
+      .filter((m) => m.month < currentMonth && m.spend > 0)
+      .map((m) => m.spend);
     let cov = 0.15;
     if (completed.length >= 2) {
       const mean = completed.reduce((a, b) => a + b, 0) / completed.length;

@@ -21,6 +21,10 @@ const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'S
 const compactINR = (amount: number) =>
   `${amount < 0 ? '-' : ''}₹${formatCompactNumber(Math.abs(amount))}`;
 
+// Full-precision rupees (e.g. ₹3,61,317) for the headline figures.
+const fullINR = (amount: number) =>
+  formatCurrency(Math.round(amount), 'INR', { maximumFractionDigits: 0 });
+
 // Day-of-year for the last day of month `m` (1-12) in `year`.
 const endOfMonthDayOfYear = (year: number, m: number): number => {
   const startOfYear = new Date(year, 0, 1);
@@ -127,6 +131,12 @@ const SpendProjectionCard: React.FC = () => {
     chartData.push(point);
   }
 
+  const legendTotals: Record<string, number> = {
+    Low: projection.low,
+    Mid: projection.mid,
+    High: projection.high,
+  };
+
   const today = new Date();
   const spentCaption = `to ${today.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}`;
 
@@ -140,14 +150,14 @@ const SpendProjectionCard: React.FC = () => {
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', mb: 2 }}>
-        <Stat label="Spent so far" value={compactINR(spentSoFar)} caption={spentCaption} />
+        <Stat label="Spent so far" value={fullINR(spentSoFar)} caption={spentCaption} />
         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
-        <Stat label="Daily run-rate" value={compactINR(dailyRunRate)} caption="per day" />
+        <Stat label="Daily run-rate" value={fullINR(dailyRunRate)} caption="per day" />
         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
         <Stat
           label="Projected total"
-          value={compactINR(projection.mid)}
-          caption={`mid case, Dec 31`}
+          value={fullINR(projection.mid)}
+          caption="mid case, Dec 31"
           color={categoryColors.voluntary}
         />
       </Box>
@@ -172,7 +182,15 @@ const SpendProjectionCard: React.FC = () => {
           <Tooltip
             formatter={(value, name) => [formatCurrency(value as number), name as string]}
           />
-          <Legend wrapperStyle={{ paddingTop: 8, fontSize: 12 }} />
+          <Legend
+            wrapperStyle={{ paddingTop: 8, fontSize: 12 }}
+            formatter={(value) => {
+              const name = value as string;
+              return legendTotals[name] !== undefined
+                ? `${name} · ${compactINR(legendTotals[name])}`
+                : name;
+            }}
+          />
           <Area
             type="monotone"
             dataKey="actual"
@@ -186,7 +204,7 @@ const SpendProjectionCard: React.FC = () => {
           <Line
             type="monotone"
             dataKey="low"
-            name={`Low ${compactINR(projection.low)}`}
+            name="Low"
             stroke={categoryColors.income}
             strokeWidth={2}
             strokeDasharray="6 5"
@@ -196,7 +214,7 @@ const SpendProjectionCard: React.FC = () => {
           <Line
             type="monotone"
             dataKey="mid"
-            name={`Mid ${compactINR(projection.mid)}`}
+            name="Mid"
             stroke={categoryColors.voluntary}
             strokeWidth={2}
             strokeDasharray="6 5"
@@ -206,7 +224,7 @@ const SpendProjectionCard: React.FC = () => {
           <Line
             type="monotone"
             dataKey="high"
-            name={`High ${compactINR(projection.high)}`}
+            name="High"
             stroke={categoryColors.assets}
             strokeWidth={2}
             strokeDasharray="6 5"
