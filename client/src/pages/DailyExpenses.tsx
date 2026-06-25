@@ -9,10 +9,11 @@ import {
   Grid,
   Snackbar,
 } from '@mui/material';
-import { Add, Email, ExpandMore } from '@mui/icons-material';
+import { Add, Email, ExpandMore, Download } from '@mui/icons-material';
 import DailyExpenseList from '../components/daily-expenses/DailyExpenseList';
 import DailyExpenseForm from '../components/daily-expenses/DailyExpenseForm';
 import DateRangeFilter from '../components/daily-expenses/DateRangeFilter';
+import ExportCsvDialog from '../components/daily-expenses/ExportCsvDialog';
 import WeeklyAnalyticsCharts from '../components/daily-expenses/WeeklyAnalyticsCharts';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import { dailyExpenseService } from '../services/dailyExpenseService';
@@ -46,6 +47,9 @@ const DailyExpenses: React.FC = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
+
+  // CSV export state
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Email sending state
   const [sendingEmail, setSendingEmail] = useState(false);
@@ -223,6 +227,13 @@ const DailyExpenses: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
+            startIcon={<Download />}
+            onClick={() => setExportDialogOpen(true)}
+          >
+            Download CSV
+          </Button>
+          <Button
+            variant="outlined"
             startIcon={sendingEmail ? <CircularProgress size={16} /> : <Email />}
             onClick={handleSendWeeklySummary}
             disabled={sendingEmail || !weeklyAnalytics || weeklyAnalytics.transactionCount === 0}
@@ -331,6 +342,13 @@ const DailyExpenses: React.FC = () => {
         onSubmit={handleSubmit}
         initialData={editingExpense}
         loading={saving}
+      />
+
+      {/* CSV Export Dialog */}
+      <ExportCsvDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        onError={(message) => setSnackbar({ open: true, message, severity: 'error' })}
       />
 
       {/* Delete Confirmation */}
