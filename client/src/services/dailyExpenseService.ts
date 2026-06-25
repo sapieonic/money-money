@@ -25,6 +25,30 @@ export const dailyExpenseService = {
     return response.data.data!;
   },
 
+  // Fetches every expense matching the filters by walking through all pages.
+  // The backend caps `limit` at 200, so we loop until there are no more results.
+  getAllForExport: async (
+    filters?: Omit<DailyExpenseFilters, 'page' | 'limit'>
+  ): Promise<DailyExpense[]> => {
+    const EXPORT_PAGE_SIZE = 200;
+    const items: DailyExpense[] = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const response = await dailyExpenseService.getAll({
+        ...filters,
+        page,
+        limit: EXPORT_PAGE_SIZE,
+      });
+      items.push(...response.items);
+      hasMore = response.hasMore;
+      page += 1;
+    }
+
+    return items;
+  },
+
   getSummary: async (): Promise<DailyExpenseSummary> => {
     const response = await api.get<ApiResponse<DailyExpenseSummary>>('/api/daily-expenses/summary');
     return response.data.data!;
