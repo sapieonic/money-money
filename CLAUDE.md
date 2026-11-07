@@ -82,13 +82,9 @@ Frontend uses `VITE_` prefix. Requires `VITE_API_URL` and Firebase config vars.
 ## Deployment (Terraform + Serverless)
 
 Two deployment paths exist: Terraform (`manager/infra/`, primary) and Serverless (fallback). See `manager/infra/README.md`.
-- `serverless.yml` stays the source of truth for functions, routes, schedules, runtime, memory/timeout, log retention and CORS. Terraform reads it via `yamldecode`, so add endpoints there only and both paths pick them up. `infra/guards.tf` fails `terraform plan` if `serverless.yml` uses something Terraform doesn't translate (only `httpApi` method+path and `schedule` events, no per-function env/runtime/layers, literal memory/timeout, no `resources`/`custom`/extra plugins, `build.esbuild` must match `scripts/build-lambdas.mjs`). Extend `infra/locals.tf` + the guard allow-lists when adding such settings.
-- `scripts/build-lambdas.mjs` bundles each `src/handlers/*.ts` with esbuild into `dist/lambda/bundles/`; handlers must live in `src/handlers/`.
-- `scripts/tf.mjs` loads `.env.<stage>` then `.env` (Serverless precedence) into `TF_VAR_*`, inits per-stage S3 state (`TF_STATE_BUCKET`), and adds `infra/env/<stage>.tfvars`.
-- A new Lambda env var must be added to `serverless.yml`, `infra/variables.tf`, `infra/locals.tf` (`environment`), and `APP_ENV_VARS` in `scripts/tf.mjs`. The guard catches a mismatch between the first and third.
+- `serverless.yml` is the single source of truth for both stacks: functions, routes, schedules, env vars and build options. Make changes there only; Terraform derives everything from it, and `infra/guards.tf` fails `terraform plan` on settings Terraform can't translate (extend `infra/locals.tf` and the guard allow-lists to support new ones). Env var values must use `${env:NAME}` / `${env:NAME, 'default'}` or literals.
 - Terraform resources are named `finance-watch-<stage>-*` (Serverless: `money-tracker-api-<stage>-*`) so both stacks can coexist.
-- Scheduled jobs must run in at most one stack (`processDebtPayments` is not idempotent). The single committed switch is `params.<stage>.serverlessRunsSchedules` in `serverless.yml`: true = Serverless runs them, false = Terraform does (Terraform reads it inverted). When flipping it, deploy the stack that turns off first. Do not deploy either stack with a different value than what's committed.
-- `infra/.terraform.lock.hcl` is committed with checksums for all platforms; refresh with `terraform providers lock -platform=...` after upgrading providers.
+- Scheduled jobs must run in at most one stack (`processDebtPayments` is not idempotent). The single committed switch is `params.<stage>.serverlessRunsSchedules` in `serverless.yml`: true = Serverless runs them, false = Terraform does. When flipping it, deploy the stack that turns off first. Never deploy either stack with a different value than what's committed.
 
 ## Serverless Config
 

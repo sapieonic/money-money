@@ -8,12 +8,13 @@
  *
  * What it does on top of plain `terraform`:
  *  - Loads manager/.env.<stage> and manager/.env, the same files and precedence
- *    as Serverless v4, and exports each app setting as TF_VAR_<name>, so no
- *    secrets live in tfvars.
+ *    as Serverless v4, and passes every variable serverless.yml references as
+ *    `${env:NAME}` to Terraform as TF_VAR_app_env, so no secrets live in tfvars.
  *  - Uses a separate working directory per stage (infra/.terraform-<stage>) and
  *    runs `terraform init` against that stage's S3 state the first time.
- *  - Adds -var-file=env/<stage>.tfvars where Terraform accepts it.
- *  - Rebuilds the Lambda bundles before commands that read them.
+ *  - Adds -var-file=env/<stage>.tfvars (if present) where Terraform accepts it.
+ *  - Rebuilds the Lambda bundles before plan/apply; other commands that read
+ *    them only build when they are missing.
  *
  * Env overrides: TERRAFORM_BIN (binary path), SKIP_BUILD=1, TF_STATE_BUCKET,
  * TF_STATE_REGION (default ap-south-1).
@@ -21,38 +22,15 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
+import { envVarNames, readServerlessConfig, root } from './serverless-config.mjs';
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const infraDir = path.join(root, 'infra');
 
-// App settings forwarded to Terraform. Names match .env / serverless.yml
-// (infra/guards.tf fails the plan if serverless.yml has one Terraform lacks).
-const APP_ENV_VARS = [
-  'MONGODB_URI',
-  'MONGODB_DB_NAME',
-  'FIREBASE_PROJECT_ID',
-  'TELEGRAM_BOT_TOKEN',
-  'LLM_PROVIDER',
-  'AZURE_OPENAI_API_KEY',
-  'AZURE_OPENAI_ENDPOINT',
-  'AZURE_OPENAI_DEPLOYMENT',
-  'AZURE_OPENAI_API_VERSION',
-  'DATABRICKS_HOST',
-  'DATABRICKS_TOKEN',
-  'DATABRICKS_SERVING_ENDPOINT',
-  'EMAIL_PROVIDER',
-  'MAILJET_API_KEY',
-  'MAILJET_SECRET_KEY',
-  'MAILJET_FROM_EMAIL',
-  'MAILJET_FROM_NAME',
-  'GRAFANA_OTLP_ENDPOINT',
-  'GRAFANA_OTLP_HEADERS',
-];
-
-const VAR_FILE_COMMANDS = new Set(['plan', 'apply', 'destroy', 'import', 'refresh', 'console']);
-const BUILD_COMMANDS = new Set(['plan', 'apply', 'destroy', 'import', 'refresh', 'console']);
+// Commands that evaluate the configuration: they get -var-file and need bundles.
+const CONFIG_COMMANDS = new Set(['plan', 'apply', 'destroy', 'import', 'refresh', 'console']);
+// Commands that deploy code always rebuild; the others only need bundles to exist.
+const FRESH_BUILD_COMMANDS = new Set(['plan', 'apply']);
 // apply/plan flags that may take their value as the next argument (`-target X`).
 const FLAGS_WITH_VALUE = new Set([
   '-target', '-replace', '-var', '-var-file', '-parallelism', '-lock-timeout',
@@ -85,12 +63,21 @@ for (const file of [`.env.${stage}`, '.env']) {
 }
 
 const dataDir = path.join(infraDir, `.terraform-${stage}`);
-const env = { ...process.env, TF_VAR_stage: stage, TF_DATA_DIR: dataDir };
-for (const name of APP_ENV_VARS) {
-  if (process.env[name] !== undefined) {
-    env[`TF_VAR_${name.toLowerCase()}`] = process.env[name];
-  }
-}
+const appEnv = Object.fromEntries(
+  envVarNames(readServerlessConfig())
+    .filter((name) => process.env[name] !== undefined)
+    .map((name) => [name, process.env[name]])
+);
+const env = {
+  ...process.env,
+  TF_VAR_stage: stage,
+  // Terraform parses map-typed TF_VAR_ values as HCL: escape template sequences.
+  // (Replacement functions, because "$$" in a replacement string means "$".)
+  TF_VAR_app_env: JSON.stringify(appEnv)
+    .replaceAll('${', () => '$${')
+    .replaceAll('%{', () => '%%{'),
+  TF_DATA_DIR: dataDir,
+};
 
 const terraformBin = process.env.TERRAFORM_BIN || 'terraform';
 
@@ -207,14 +194,16 @@ function savedPlanArg() {
 }
 const appliesSavedPlan = savedPlanArg() !== null;
 
-if (BUILD_COMMANDS.has(command) && !appliesSavedPlan && process.env.SKIP_BUILD !== '1') {
+const bundlesMissing = !existsSync(path.join(root, 'dist', 'lambda', 'bundles'));
+const needsBuild = FRESH_BUILD_COMMANDS.has(command) || (CONFIG_COMMANDS.has(command) && bundlesMissing);
+if (needsBuild && !appliesSavedPlan && process.env.SKIP_BUILD !== '1') {
   const build = spawnSync(process.execPath, [path.join(root, 'scripts', 'build-lambdas.mjs')], { stdio: 'inherit' });
   if (build.status !== 0) fail('Lambda build failed');
 }
 
 const args = [command];
 const varFile = path.join(infraDir, 'env', `${stage}.tfvars`);
-if (VAR_FILE_COMMANDS.has(command) && !appliesSavedPlan && existsSync(varFile)) {
+if (CONFIG_COMMANDS.has(command) && !appliesSavedPlan && existsSync(varFile)) {
   args.push(`-var-file=${path.relative(infraDir, varFile)}`);
 }
 args.push(...rest);

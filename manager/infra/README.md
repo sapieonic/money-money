@@ -8,40 +8,31 @@ as a fallback.
 ## How it fits together
 
 ```
-serverless.yml ──(yamldecode)──► infra/*.tf ◄── env/<stage>.tfvars   (non-secret settings)
-                                     ▲
-src/handlers/*.ts ──esbuild──► dist/lambda/bundles/<module>.js ──zip──┘
-                                     ▲
-manager/.env.<stage> + .env ──scripts/tf.mjs──► TF_VAR_*           (secrets)
+serverless.yml ──(yamldecode)──────────────► infra/*.tf ◄── env/<stage>.tfvars (optional)
+      │                                          ▲   ▲
+      └─ handlers + build.esbuild ─► build-lambdas.mjs ─► dist/lambda/bundles/*.js
+                                                     │
+manager/.env.<stage> + .env ─► tf.mjs ─► TF_VAR_app_env (values for ${env:NAME})
 ```
 
 - **`serverless.yml` is the single source of truth** for functions, routes,
-  schedules, runtime, memory and timeout, log retention and CORS. Terraform reads
-  it with `yamldecode`, so a function added there is deployed by both paths.
+  schedules, runtime, memory and timeout, log retention, CORS, the build options
+  and the Lambda environment. Both stacks are deployed from it, so changes are
+  made there only. That includes adding an env var: `locals.tf` translates
+  `${env:NAME}`, `${env:NAME, 'default'}` and `${self:provider.stage}`.
 - **Guards.** `guards.tf` makes `terraform plan` fail if `serverless.yml` uses
   something Terraform doesn't translate, instead of deploying a different stack
-  than Serverless would. That covers:
-  - event types other than `httpApi`/`schedule`, and httpApi `authorizer`;
-  - per-function `environment`, `layers` or `runtime`;
-  - provider `iam` or `architecture`, and the `cors: true` shorthand;
-  - duplicate routes;
-  - non-literal memory and timeout values;
-  - an env var present in `serverless.yml` but missing from Terraform;
-  - top-level sections such as `resources` or `custom`, or other plugins;
-  - `build.esbuild` options that differ from `scripts/build-lambdas.mjs`.
-
-  A `terraform plan -target=…` that leaves out
-  `terraform_data.serverless_config_guard` skips these checks.
-
-  To add support for one, extend `locals.tf` and the allow-lists in `guards.tf`.
-- **Code.** `scripts/build-lambdas.mjs` bundles each file in `src/handlers/`
-  with the same esbuild settings as Serverless.
+  than Serverless would. The allow-lists in that file show what is supported.
+  The build script likewise rejects `build.esbuild` options it doesn't handle.
+- **Code.** `scripts/build-lambdas.mjs` bundles the handler files listed in
+  `serverless.yml`, using its `build.esbuild` options.
   - All functions from one file share a zip; the handler string is `<module>.<export>`.
   - Zips are deterministic, so a function is only redeployed when its bundle changes.
   - Zips are stored per stage in `dist/lambda/zip/<stage>/`.
 - **Secrets.** `scripts/tf.mjs` loads `.env.<stage>` and `.env`, with the same
   precedence as Serverless v4 (shell, then `.env.<stage>`, then `.env`). It
-  exports each app setting as `TF_VAR_<name>`.
+  passes the variables `serverless.yml` references to Terraform as one
+  sensitive map.
 - **Names.** Resources are prefixed `finance-watch-<stage>-…`, while Serverless
   uses `money-tracker-api-<stage>-…`, so both stacks can exist in one account
   at the same time.
@@ -49,14 +40,14 @@ manager/.env.<stage> + .env ──scripts/tf.mjs──► TF_VAR_*           (se
 | File | Contents |
 |---|---|
 | `versions.tf` | Terraform/provider versions, S3 backend, AWS provider |
-| `variables.tf` | Stage settings and Lambda environment variables |
-| `locals.tf` | Parsing of `serverless.yml`, Lambda environment |
+| `variables.tf` | Stage settings and the `app_env` map |
+| `locals.tf` | Translation of `serverless.yml` (functions, routes, schedules, environment) |
 | `guards.tf` | Fails the plan on `serverless.yml` settings Terraform doesn't deploy |
 | `lambda.tf` | IAM role, code zips, log groups, functions |
 | `api.tf` | HTTP API, routes, integrations, optional custom domain |
 | `schedules.tf` | EventBridge rules for scheduled jobs |
 | `outputs.tf` | API URL, Telegram webhook URL, function names |
-| `env/<stage>.tfvars` | Per-stage non-secret settings |
+| `env/<stage>.tfvars` | Optional per-stage overrides (prod: custom domain) |
 | `bootstrap/` | One-time creation of the state bucket |
 | `.terraform.lock.hcl` | Provider versions and checksums for all platforms (committed) |
 

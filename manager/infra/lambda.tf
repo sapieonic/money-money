@@ -84,10 +84,6 @@ resource "aws_lambda_function" "fn" {
 
   lifecycle {
     precondition {
-      condition     = each.value.handler_dir == "src/handlers"
-      error_message = "Function ${each.key}: handler must live in src/handlers/ (that is what scripts/build-lambdas.mjs bundles)."
-    }
-    precondition {
       condition     = length("${local.name_prefix}-${each.key}") <= 64
       error_message = "Function name ${local.name_prefix}-${each.key} exceeds Lambda's 64-character limit."
     }

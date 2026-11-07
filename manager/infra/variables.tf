@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# Deployment settings (non-secret; set per stage in env/<stage>.tfvars)
+# Deployment settings (non-secret; override per stage in env/<stage>.tfvars)
 # ---------------------------------------------------------------------------
 
 variable "stage" {
@@ -37,138 +37,17 @@ variable "api_certificate_arn" {
 }
 
 # ---------------------------------------------------------------------------
-# Application configuration (Lambda environment variables)
-#
-# scripts/tf.mjs fills these from manager/.env (or .env.<stage>) by exporting
-# TF_VAR_<lowercased env name>, so the same .env file drives both Serverless
-# and Terraform deployments. Defaults match serverless.yml.
+# Application configuration
 # ---------------------------------------------------------------------------
 
-variable "mongodb_uri" {
-  description = "MONGODB_URI"
-  type        = string
-  sensitive   = true
-
-  validation {
-    condition     = length(var.mongodb_uri) > 0
-    error_message = "MONGODB_URI must be set."
-  }
-}
-
-variable "mongodb_db_name" {
-  description = "MONGODB_DB_NAME"
-  type        = string
-  default     = "money-tracker-dev"
-}
-
-variable "firebase_project_id" {
-  description = "FIREBASE_PROJECT_ID"
-  type        = string
-
-  validation {
-    condition     = length(var.firebase_project_id) > 0
-    error_message = "FIREBASE_PROJECT_ID must be set."
-  }
-}
-
-variable "telegram_bot_token" {
-  description = "TELEGRAM_BOT_TOKEN"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "llm_provider" {
-  description = "LLM_PROVIDER"
-  type        = string
-  default     = ""
-}
-
-variable "azure_openai_api_key" {
-  description = "AZURE_OPENAI_API_KEY"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "azure_openai_endpoint" {
-  description = "AZURE_OPENAI_ENDPOINT"
-  type        = string
-  default     = ""
-}
-
-variable "azure_openai_deployment" {
-  description = "AZURE_OPENAI_DEPLOYMENT"
-  type        = string
-  default     = ""
-}
-
-variable "azure_openai_api_version" {
-  description = "AZURE_OPENAI_API_VERSION"
-  type        = string
-  default     = "2024-02-15-preview"
-}
-
-variable "databricks_host" {
-  description = "DATABRICKS_HOST"
-  type        = string
-  default     = ""
-}
-
-variable "databricks_token" {
-  description = "DATABRICKS_TOKEN"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "databricks_serving_endpoint" {
-  description = "DATABRICKS_SERVING_ENDPOINT"
-  type        = string
-  default     = "databricks-claude-sonnet-4-6"
-}
-
-variable "email_provider" {
-  description = "EMAIL_PROVIDER"
-  type        = string
-  default     = ""
-}
-
-variable "mailjet_api_key" {
-  description = "MAILJET_API_KEY"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "mailjet_secret_key" {
-  description = "MAILJET_SECRET_KEY"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "mailjet_from_email" {
-  description = "MAILJET_FROM_EMAIL"
-  type        = string
-  default     = ""
-}
-
-variable "mailjet_from_name" {
-  description = "MAILJET_FROM_NAME"
-  type        = string
-  default     = "Finance Watch"
-}
-
-variable "grafana_otlp_endpoint" {
-  description = "GRAFANA_OTLP_ENDPOINT (exposed to the app as OTEL_EXPORTER_OTLP_ENDPOINT)"
-  type        = string
-  default     = ""
-}
-
-variable "grafana_otlp_headers" {
-  description = "GRAFANA_OTLP_HEADERS (exposed to the app as OTEL_EXPORTER_OTLP_HEADERS)"
-  type        = string
-  default     = ""
+variable "app_env" {
+  description = <<-EOT
+    Values for the $${env:NAME} references in serverless.yml provider.environment,
+    keyed by NAME. scripts/tf.mjs fills it from manager/.env.<stage> and .env, so
+    the same files drive both deployments. The Lambda environment itself (names,
+    defaults, literals) is derived from serverless.yml in locals.tf.
+  EOT
+  type        = map(string)
+  default     = {}
   sensitive   = true
 }

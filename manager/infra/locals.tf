@@ -1,12 +1,10 @@
 # ---------------------------------------------------------------------------
 # serverless.yml is the single source of truth for functions, routes,
-# schedules, runtime, memory/timeout, log retention and CORS. Terraform reads
-# it directly, so adding a function there deploys it through both paths.
-#
-# Only plain YAML is read from these sections; `${...}` Serverless variables
-# are NOT resolved here. The Lambda environment is therefore defined
-# explicitly in local.environment, and guards.tf fails the plan if
-# serverless.yml uses a setting this config does not translate.
+# schedules, runtime, memory/timeout, log retention, CORS and the Lambda
+# environment. Terraform reads it directly, so changes there deploy through
+# both paths. `${...}` Serverless variables are not resolved by yamldecode;
+# the few forms this config translates are handled below, and guards.tf fails
+# the plan on anything else.
 # ---------------------------------------------------------------------------
 
 locals {
@@ -16,9 +14,9 @@ locals {
   name_prefix = "${var.project}-${var.stage}"
 
   runtime            = local.sls_provider.runtime
-  default_memory     = try(local.sls_provider.memorySize, 256)
-  default_timeout    = try(local.sls_provider.timeout, 20)
-  log_retention_days = try(local.sls_provider.logRetentionInDays, 14)
+  default_memory     = local.sls_provider.memorySize
+  default_timeout    = local.sls_provider.timeout
+  log_retention_days = local.sls_provider.logRetentionInDays
   cors               = try(local.sls_provider.httpApi.cors, {})
 
   # scripts/build-lambdas.mjs writes one bundle per handler module here.
@@ -30,8 +28,7 @@ locals {
   # functionName => normalized definition
   functions = {
     for name, fn in local.serverless.functions : name => {
-      # "src/handlers/income.getAll" -> dir "src/handlers", module "income", export "getAll"
-      handler_dir = dirname(fn.handler)
+      # "src/handlers/income.getAll" -> module "income" (bundle name), export "getAll"
       module      = split(".", basename(fn.handler))[0]
       export      = split(".", basename(fn.handler))[1]
       description = try(fn.description, null)
@@ -44,82 +41,58 @@ locals {
   # Handler modules that need a bundle/zip.
   modules = toset([for fn in local.functions : fn.module])
 
-  # Every httpApi event as { key = "GET /api/income", function = "getIncomes" }.
-  # Supports `httpApi: { method, path }` and the `httpApi: 'GET /path'` shorthand.
-  http_route_list = flatten([
-    for name, fn in local.functions : [
-      for ev in fn.events : {
-        key = try(
-          "${ev.httpApi.method == "*" ? "ANY" : upper(ev.httpApi.method)} ${ev.httpApi.path}",
-          format("%s %s", upper(regex("^(\\S+) (.+)$", ev.httpApi)[0]), regex("^(\\S+) (.+)$", ev.httpApi)[1]),
-          tostring(ev.httpApi),
-        )
-        function = name
-      }
-      if can(ev.httpApi)
-    ]
+  # Every event as { fn, ev }, for routes, schedules and guards.tf.
+  events = flatten([
+    for name, fn in local.functions : [for ev in fn.events : { fn = name, ev = ev }]
   ])
 
-  # route key => [functions]; more than one entry is a duplicate (guards.tf).
-  http_route_owners = { for r in local.http_route_list : r.key => r.function... }
-
-  # "GET /api/income" => function name
-  http_routes = { for key, owners in local.http_route_owners : key => owners[0] }
-
-  # Functions that are reachable through the HTTP API.
+  # route key ("GET /api/income") => [functions]; >1 entry is a duplicate (guards.tf).
+  http_route_owners = {
+    for e in local.events :
+    "${try(e.ev.httpApi.method == "*" ? "ANY" : upper(e.ev.httpApi.method), "?")} ${try(e.ev.httpApi.path, "?")}" => e.fn...
+    if can(e.ev.httpApi)
+  }
+  http_routes    = { for key, owners in local.http_route_owners : key => owners[0] }
   http_functions = toset(values(local.http_routes))
 
-  # params.<stage>.serverlessRunsSchedules (falling back to params.default, like
-  # Serverless) decides which stack runs the scheduled jobs; Terraform runs them
-  # only when Serverless does not. Missing/invalid values keep Terraform's off.
+  # Terraform runs the scheduled jobs only when serverless.yml says Serverless
+  # does not (params.<stage>.serverlessRunsSchedules, falling back to
+  # params.default like Serverless). See the comment at the top of serverless.yml.
   serverless_params = try(local.serverless.params, {})
-  serverless_runs_schedules = try(
+  terraform_runs_schedules = !try(
     tobool(local.serverless_params[var.stage].serverlessRunsSchedules),
     tobool(local.serverless_params.default.serverlessRunsSchedules),
     true,
   )
-  terraform_runs_schedules = !local.serverless_runs_schedules
 
   # "<functionName>-<eventIndex>" => schedule definition
   schedules = merge([
     for name, fn in local.functions : {
       for idx, ev in fn.events : "${name}-${idx}" => {
-        function = name
-        # Unsupported shapes (e.g. a list of rates) are reported by guards.tf.
-        expression  = try(tostring(ev.schedule.rate), tostring(ev.schedule), "unsupported")
+        function    = name
+        expression  = try(tostring(ev.schedule.rate), tostring(ev.schedule), "unsupported") # see guards.tf
         description = try(ev.schedule.description, null)
-        # A literal `enabled: false` in serverless.yml disables the job in both
-        # stacks. The `${strToBool(${param:serverlessRunsSchedules})}` expression
-        # is not resolved here; local.terraform_runs_schedules decides instead.
+        # A literal `enabled: false` disables the job in both stacks; the
+        # `${strToBool(${param:...})}` expression is Serverless-only.
         enabled = try(tobool(ev.schedule.enabled), true)
       }
       if can(ev.schedule)
     }
   ]...)
 
-  # Mirrors provider.environment in serverless.yml (guards.tf checks the keys match).
+  # Lambda environment, derived from provider.environment:
+  #   ${env:NAME}             -> var.app_env[NAME] (required, see guards.tf)
+  #   ${env:NAME, 'default'}  -> var.app_env[NAME], else default
+  #   literal                 -> as is, with ${self:provider.stage} -> var.stage
+  env_refs = {
+    for k, v in local.sls_provider.environment : k =>
+    try(regex("^\\$\\{env:(?P<name>\\w+)(?:,\\s*'(?P<default>[^']*)')?\\}$", tostring(v)), null)
+  }
   environment = {
-    MONGODB_URI                 = var.mongodb_uri
-    MONGODB_DB_NAME             = var.mongodb_db_name
-    FIREBASE_PROJECT_ID         = var.firebase_project_id
-    TELEGRAM_BOT_TOKEN          = var.telegram_bot_token
-    LLM_PROVIDER                = var.llm_provider
-    AZURE_OPENAI_API_KEY        = var.azure_openai_api_key
-    AZURE_OPENAI_ENDPOINT       = var.azure_openai_endpoint
-    AZURE_OPENAI_DEPLOYMENT     = var.azure_openai_deployment
-    AZURE_OPENAI_API_VERSION    = var.azure_openai_api_version
-    DATABRICKS_HOST             = var.databricks_host
-    DATABRICKS_TOKEN            = var.databricks_token
-    DATABRICKS_SERVING_ENDPOINT = var.databricks_serving_endpoint
-    EMAIL_PROVIDER              = var.email_provider
-    MAILJET_API_KEY             = var.mailjet_api_key
-    MAILJET_SECRET_KEY          = var.mailjet_secret_key
-    MAILJET_FROM_EMAIL          = var.mailjet_from_email
-    MAILJET_FROM_NAME           = var.mailjet_from_name
-    OTEL_SERVICE_NAME           = "finance-watch-api"
-    OTEL_EXPORTER_OTLP_ENDPOINT = var.grafana_otlp_endpoint
-    OTEL_EXPORTER_OTLP_HEADERS  = var.grafana_otlp_headers
-    # src/utils/telemetry.ts parses this with split('=')[1]; keep it a single attribute.
-    OTEL_RESOURCE_ATTRIBUTES = "deployment.environment=${var.stage}"
+    for k, v in local.sls_provider.environment : k => (
+      local.env_refs[k] == null
+      ? replace(tostring(v), "$${self:provider.stage}", var.stage)
+      : lookup(var.app_env, local.env_refs[k].name, local.env_refs[k].default == null ? "" : local.env_refs[k].default)
+    )
   }
 }
