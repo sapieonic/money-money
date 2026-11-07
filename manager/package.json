@@ -7,6 +7,12 @@
     "deploy": "serverless deploy",
     "deploy:prod": "serverless deploy --stage prod",
     "logs": "serverless logs -f",
+    "build:lambda": "node scripts/build-lambdas.mjs",
+    "tf": "node scripts/tf.mjs",
+    "tf:plan": "node scripts/tf.mjs dev plan",
+    "tf:plan:prod": "node scripts/tf.mjs prod plan",
+    "deploy:tf": "node scripts/tf.mjs dev apply",
+    "deploy:tf:prod": "node scripts/tf.mjs prod apply",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:email-prefs": "ts-node scripts/migrate-email-preferences.ts"
   },
@@ -26,6 +32,7 @@
     "dotenv": "^17.2.3",
     "esbuild": "^0.27.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "yaml": "^2.9.1"
   }
 }

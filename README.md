@@ -176,7 +176,8 @@ money-money/
 │   │   ├── middleware/        # Auth middleware
 │   │   ├── utils/             # Database & response utilities
 │   │   └── types/             # TypeScript interfaces
-│   ├── serverless.yml         # Serverless configuration
+│   ├── infra/                 # Terraform deployment (reads serverless.yml)
+│   ├── serverless.yml         # Functions/routes/schedules (used by Serverless and Terraform)
 │   └── package.json
 │
 └── README.md
@@ -280,9 +281,11 @@ VITE_FIREBASE_APP_ID=your-app-id
 ### Deployment
 
 #### Backend (AWS Lambda)
+Deployed with Terraform; Serverless is kept as a fallback. See [`manager/infra/README.md`](manager/infra/README.md).
 ```bash
 cd manager
-serverless deploy --stage prod
+npm run deploy:tf:prod    # Terraform (primary)
+npm run deploy:prod       # Serverless (fallback)
 ```
 
 #### Frontend

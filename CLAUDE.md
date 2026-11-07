@@ -12,8 +12,12 @@ Finance Watch — a personal finance app with React 19 frontend (`client/`) and 
 ```bash
 npm install              # install deps
 npm run dev              # local dev via serverless-offline (http://localhost:3000)
-npm run deploy:prod      # deploy to AWS Lambda (ap-south-1)
-serverless logs -f <functionName>  # view Lambda logs
+npm run tf:plan:prod     # Terraform plan for prod (builds bundles first)
+npm run deploy:tf:prod   # deploy to AWS via Terraform (primary path, ap-south-1)
+npm run tf -- <stage> <terraform args>  # any Terraform command, e.g. `npm run tf -- prod output`
+npm run deploy:prod      # deploy via Serverless (fallback path; schedule ownership follows params in serverless.yml)
+aws logs tail /aws/lambda/finance-watch-prod-<functionName> --follow  # logs (Terraform stack)
+serverless logs -f <functionName>  # logs (Serverless stack)
 ```
 
 ### Frontend (`client/`)
@@ -71,9 +75,16 @@ Defined in `serverless.yml`. All scheduled handlers are in `handlers/scheduledJo
 
 ## Environment Variables
 
-Backend requires `MONGODB_URI`, `MONGODB_DB_NAME`, `FIREBASE_PROJECT_ID` at minimum. Optional integrations (Telegram, Azure OpenAI, Databricks Claude, Mailjet, Grafana OTLP) are enabled by their respective env vars. All env vars must also be configured in `serverless.yml` for deployment.
+Backend requires `MONGODB_URI`, `MONGODB_DB_NAME`, `FIREBASE_PROJECT_ID` at minimum. Optional integrations (Telegram, Azure OpenAI, Databricks Claude, Mailjet, Grafana OTLP) are enabled by their respective env vars. All env vars must also be configured in `serverless.yml` and the Terraform config for deployment (see "Deployment" below).
 
 Frontend uses `VITE_` prefix. Requires `VITE_API_URL` and Firebase config vars.
+
+## Deployment (Terraform + Serverless)
+
+Two deployment paths exist: Terraform (`manager/infra/`, primary) and Serverless (fallback). See `manager/infra/README.md`.
+- `serverless.yml` is the single source of truth for both stacks: functions, routes, schedules, env vars and build options. Make changes there only; Terraform derives everything from it, and `infra/guards.tf` fails `terraform plan` on settings Terraform can't translate (extend `infra/locals.tf` and the guard allow-lists to support new ones). Env var values must use `${env:NAME}` / `${env:NAME, 'default'}` or literals.
+- Terraform resources are named `finance-watch-<stage>-*` (Serverless: `money-tracker-api-<stage>-*`) so both stacks can coexist.
+- Scheduled jobs must run in at most one stack (`processDebtPayments` is not idempotent). The single committed switch is `params.<stage>.serverlessRunsSchedules` in `serverless.yml`: true = Serverless runs them, false = Terraform does. When flipping it, deploy the stack that turns off first. Never deploy either stack with a different value than what's committed.
 
 ## Serverless Config
 

@@ -1,5 +1,14 @@
 service: money-tracker-api
 
+# Which stack runs the scheduled jobs, per stage. true = this Serverless stack
+# runs them; false = the Terraform stack (infra/) runs them. Terraform reads this
+# same value (inverted), so a job can never be enabled in both stacks.
+# processDebtPayments is not idempotent. To switch, change it here, commit, and
+# deploy the stack that turns OFF first. See infra/README.md.
+params:
+  default:
+    serverlessRunsSchedules: true
+
 provider:
   name: aws
   runtime: nodejs22.x
@@ -401,13 +410,14 @@ functions:
           method: delete
 
   # Scheduled Jobs
+  # Enabled only while params.<stage>.serverlessRunsSchedules is true (top of file).
   weeklyExpenseSummary:
     handler: src/handlers/scheduledJobs.sendWeeklyExpenseSummaries
     timeout: 120
     events:
       - schedule:
           rate: cron(30 3 ? * MON *)  # Every Monday at 9:00 AM IST (3:30 UTC)
-          enabled: true
+          enabled: ${strToBool(${param:serverlessRunsSchedules})}
           description: Send weekly expense summary emails
 
   dailyTelegramDigest:
@@ -416,7 +426,7 @@ functions:
     events:
       - schedule:
           rate: cron(0 16 * * ? *)  # Every day at 9:30 PM IST (16:00 UTC)
-          enabled: true
+          enabled: ${strToBool(${param:serverlessRunsSchedules})}
           description: Send daily AI expense digest via Telegram
 
   dailyExpenseReminder:
@@ -425,7 +435,7 @@ functions:
     events:
       - schedule:
           rate: cron(15 13 * * ? *)  # Every day at 6:45 PM IST (13:15 UTC)
-          enabled: true
+          enabled: ${strToBool(${param:serverlessRunsSchedules})}
           description: Send daily expense reminders via Telegram
 
   processDebtPayments:
@@ -434,5 +444,5 @@ functions:
     events:
       - schedule:
           rate: rate(4 days)
-          enabled: true
+          enabled: ${strToBool(${param:serverlessRunsSchedules})}
           description: Process scheduled debt payments every 4 days

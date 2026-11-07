@@ -1,0 +1,18 @@
+# Terraform working directories (scripts/tf.mjs uses one per stage)
+.terraform/
+.terraform-*/
+
+# State must live in S3, never in git (it contains Lambda env secrets).
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Keep .terraform.lock.hcl committed.
