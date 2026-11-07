@@ -6,6 +6,18 @@
 # ---------------------------------------------------------------------------
 
 locals {
+  supported_top_level_keys = ["service", "params", "provider", "build", "plugins", "functions"]
+  supported_plugins        = ["serverless-offline"] # local dev only; nothing to deploy
+  # Must match the esbuild options hard-coded in scripts/build-lambdas.mjs.
+  expected_esbuild = {
+    bundle    = true
+    minify    = false
+    sourcemap = false
+    exclude   = ["aws-sdk"]
+    target    = "node20"
+    platform  = "node"
+  }
+
   supported_provider_keys = ["name", "runtime", "stage", "region", "memorySize", "timeout", "logRetentionInDays", "environment", "httpApi"]
   supported_function_keys = ["handler", "events", "timeout", "memorySize", "description"]
   supported_cors_keys     = ["allowedOrigins", "allowedHeaders", "allowedMethods"]
@@ -15,6 +27,13 @@ locals {
   serverless_env_names = keys(try(local.sls_provider.environment, {}))
 
   config_errors = concat(
+    [for k in keys(local.serverless) : "top-level '${k}' is not supported by the Terraform config" if !contains(local.supported_top_level_keys, k)],
+    [for p in try(local.serverless.plugins, []) : "plugin '${p}' is not supported by the Terraform config" if !contains(local.supported_plugins, p)],
+    [for k in try(keys(local.serverless.build), []) : "build.${k} is not supported" if k != "esbuild"],
+    try(jsonencode(local.serverless.build.esbuild), "") == jsonencode(local.expected_esbuild) ? [] : [
+      "build.esbuild differs from the options in scripts/build-lambdas.mjs: update the script and local.expected_esbuild in infra/guards.tf together"
+    ],
+    [for stage, p in local.serverless_params : "params.${stage}.serverlessRunsSchedules must be a literal true/false" if can(p.serverlessRunsSchedules) && !can(tobool(p.serverlessRunsSchedules))],
     [for k in keys(local.sls_provider) : "provider.${k} is not supported by the Terraform config" if !contains(local.supported_provider_keys, k)],
     [for k in try(keys(local.sls_provider.httpApi), []) : "provider.httpApi.${k} is not supported" if k != "cors"],
     can(keys(local.cors)) ? [

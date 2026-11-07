@@ -25,7 +25,7 @@ output "telegram_webhook_url" {
 
 output "schedules_enabled" {
   description = "Whether the scheduled jobs in this stack are active."
-  value       = var.enable_schedules
+  value       = local.terraform_runs_schedules
 }
 
 output "function_names" {

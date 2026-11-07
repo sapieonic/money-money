@@ -3,10 +3,8 @@
 
 region = "ap-south-1"
 
-# Keep false while the Serverless prod stack is live (it already runs the jobs).
-# Flip to true as part of the cutover, AFTER disabling or removing the Serverless
-# schedules — see infra/README.md.
-enable_schedules = false
+# Which stack runs the scheduled jobs is NOT set here: it is
+# params.<stage>.serverlessRunsSchedules in serverless.yml, read by both stacks.
 
 # Optional stable API hostname (ACM certificate must be in ap-south-1):
 # api_domain_name     = "api.money.manasranjan.dev"

@@ -1,9 +1,9 @@
 # ---------------------------------------------------------------------------
 # Scheduled jobs — equivalent of Serverless `schedule` events.
 #
-# Rules are always created but stay DISABLED unless var.enable_schedules is
-# true, so a Terraform stack can run side by side with the Serverless stack
-# without double-firing jobs (processDebtPayments is not idempotent).
+# Rules are always created but stay DISABLED while serverless.yml says the
+# Serverless stack runs the jobs (params.<stage>.serverlessRunsSchedules), so
+# the two stacks never double-fire jobs (processDebtPayments is not idempotent).
 # ---------------------------------------------------------------------------
 
 resource "aws_cloudwatch_event_rule" "schedule" {
@@ -12,7 +12,7 @@ resource "aws_cloudwatch_event_rule" "schedule" {
   name                = "${local.name_prefix}-${each.key}"
   description         = each.value.description
   schedule_expression = each.value.expression
-  state               = var.enable_schedules && each.value.enabled ? "ENABLED" : "DISABLED"
+  state               = local.terraform_runs_schedules && each.value.enabled ? "ENABLED" : "DISABLED"
 }
 
 resource "aws_cloudwatch_event_target" "schedule" {

@@ -3,6 +3,5 @@
 
 region = "ap-south-1"
 
-# Scheduled jobs send real emails/Telegram messages and modify debt balances.
-# Only enable on dev if the Serverless dev stack's schedules are not running.
-enable_schedules = false
+# Which stack runs the scheduled jobs is NOT set here: it is
+# params.<stage>.serverlessRunsSchedules in serverless.yml, read by both stacks.

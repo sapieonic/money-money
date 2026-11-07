@@ -94,18 +94,23 @@ for (const name of APP_ENV_VARS) {
 
 const terraformBin = process.env.TERRAFORM_BIN || 'terraform';
 
-// Runs terraform and resolves with its exit code. While it runs, Ctrl-C is left
-// to Terraform (it receives SIGINT from the terminal and shuts down gracefully,
-// releasing the state lock) instead of killing this wrapper underneath it.
+// Runs terraform and resolves with its exit code. Signals are handled so that
+// Terraform can always shut down gracefully and release the state lock:
+//  - SIGINT (Ctrl-C): the terminal already delivers it to Terraform directly, so
+//    the wrapper ignores it (forwarding a second one would make Terraform abort
+//    hard) and waits for Terraform to exit.
+//  - SIGTERM (CI cancellation, `timeout`, npm): usually sent to the wrapper only,
+//    so it is forwarded to Terraform.
 function terraform(args) {
   return new Promise((resolve) => {
     const child = spawn(terraformBin, [`-chdir=${infraDir}`, ...args], { stdio: 'inherit', env });
-    const ignore = () => {};
-    process.on('SIGINT', ignore);
-    process.on('SIGTERM', ignore);
+    const onSigint = () => {};
+    const onSigterm = () => child.kill('SIGTERM');
+    process.on('SIGINT', onSigint);
+    process.on('SIGTERM', onSigterm);
     const done = (code) => {
-      process.off('SIGINT', ignore);
-      process.off('SIGTERM', ignore);
+      process.off('SIGINT', onSigint);
+      process.off('SIGTERM', onSigterm);
       resolve(code);
     };
     child.on('error', (error) => {
@@ -120,18 +125,15 @@ function terraform(args) {
 }
 
 // --- Backend / init --------------------------------------------------------
-function backendArgs() {
+// Returns the -backend-config arguments for this stage, or null if neither a
+// backend file nor TF_STATE_BUCKET is configured.
+function findBackendArgs() {
   const backendFile = path.join(infraDir, 'backends', `${stage}.s3.tfbackend`);
   if (existsSync(backendFile)) {
     return [`-backend-config=${path.relative(infraDir, backendFile)}`];
   }
   const bucket = process.env.TF_STATE_BUCKET;
-  if (!bucket) {
-    fail(
-      `no state backend configured for "${stage}". Set TF_STATE_BUCKET in .env ` +
-        `(create the bucket with infra/bootstrap) or add infra/backends/${stage}.s3.tfbackend.`
-    );
-  }
+  if (!bucket) return null;
   return [
     `-backend-config=bucket=${bucket}`,
     `-backend-config=key=finance-watch/${stage}/terraform.tfstate`,
@@ -139,6 +141,17 @@ function backendArgs() {
     '-backend-config=encrypt=true',
     '-backend-config=use_lockfile=true',
   ];
+}
+
+function backendArgs() {
+  const args = findBackendArgs();
+  if (!args) {
+    fail(
+      `no state backend configured for "${stage}". Set TF_STATE_BUCKET in .env ` +
+        `(create the bucket with infra/bootstrap) or add infra/backends/${stage}.s3.tfbackend.`
+    );
+  }
+  return args;
 }
 
 // Remembers which backend settings this stage was initialised with, so a later
@@ -162,12 +175,17 @@ if (command === 'init') {
   process.exit(await init(backendArgs(), rest));
 }
 
-const currentBackend = backendArgs();
+const currentBackend = findBackendArgs();
 if (!existsSync(path.join(dataDir, 'terraform.tfstate'))) {
   console.error(`tf: initializing ${stage} working directory`);
-  const status = await init(currentBackend, ['-input=false']);
+  const status = await init(backendArgs(), ['-input=false']);
   if (status !== 0) process.exit(status);
-} else if (existsSync(backendMarker) && readFileSync(backendMarker, 'utf8') !== backendFingerprint(currentBackend)) {
+} else if (
+  // Only comparable when the backend settings are available in this shell.
+  currentBackend &&
+  existsSync(backendMarker) &&
+  readFileSync(backendMarker, 'utf8') !== backendFingerprint(currentBackend)
+) {
   fail(
     `the state backend settings for "${stage}" changed since it was initialised.\n` +
       `    Run: npm run tf -- ${stage} init -migrate-state   (copy existing state to the new location)\n` +

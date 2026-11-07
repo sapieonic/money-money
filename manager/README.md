@@ -367,7 +367,7 @@ This sends a friendly message encouraging users to set due dates for better expe
 | `npm run deploy:tf:prod` | Deploy to AWS with Terraform (prod stage) |
 | `npm run tf:plan` / `tf:plan:prod` | Preview Terraform changes |
 | `npm run tf -- <stage> <args>` | Run any Terraform command for a stage |
-| `npm run build:lambda` | Bundle handlers into `dist/lambda/` (run automatically by the `tf` scripts) |
+| `npm run build:lambda` | Bundle handlers into `dist/lambda/bundles/` (run automatically by the `tf` scripts) |
 | `npm run deploy` | Deploy with Serverless (dev stage, fallback) |
 | `npm run deploy:prod` | Deploy with Serverless (prod stage, fallback) |
 | `npm run logs` | View CloudWatch logs (Serverless stack; for Terraform use `aws logs tail /aws/lambda/finance-watch-<stage>-<fn>`) |

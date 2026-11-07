@@ -26,7 +26,12 @@ manager/.env.<stage> + .env ──scripts/tf.mjs──► TF_VAR_*           (se
   - provider `iam` or `architecture`, and the `cors: true` shorthand;
   - duplicate routes;
   - non-literal memory and timeout values;
-  - an env var present in `serverless.yml` but missing from Terraform.
+  - an env var present in `serverless.yml` but missing from Terraform;
+  - top-level sections such as `resources` or `custom`, or other plugins;
+  - `build.esbuild` options that differ from `scripts/build-lambdas.mjs`.
+
+  A `terraform plan -target=…` that leaves out
+  `terraform_data.serverless_config_guard` skips these checks.
 
   To add support for one, extend `locals.tf` and the allow-lists in `guards.tf`.
 - **Code.** `scripts/build-lambdas.mjs` bundles each file in `src/handlers/`
@@ -125,14 +130,20 @@ moving traffic and scheduled jobs from one stack to the other.
 > idempotent: if both stacks run it, every scheduled debt payment is recorded
 > twice. The daily digest, reminders and weekly email would also be sent twice.
 >
-> Two switches control this:
-> - `enable_schedules` in `env/prod.tfvars` (Terraform; default `false`)
-> - `SLS_SCHEDULES_ENABLED` in `.env.prod`/`.env` (Serverless; default on)
->
-> Always turn one off **before** turning the other on.
+> **One committed switch decides who runs them:** `params.<stage>.serverlessRunsSchedules`
+> at the top of `serverless.yml` (falling back to `params.default`, which is
+> `true`). Serverless enables its rules when it's `true`; Terraform enables its
+> rules only when it's `false`. Both stacks read the same value, so a deploy of
+> either one, from any machine, can never leave the jobs on in both. When you
+> flip it, **deploy the stack that turns off first**. In between, the jobs run
+> nowhere, which is safe.
 
+0. **Before you start (once):** check that Serverless resolves the switch.
+   `npx serverless print --stage prod` should show `enabled: true` (a boolean)
+   under each `schedule` event.
 1. **Deploy the Terraform stack:** `npm run deploy:tf:prod`. It's created next
-   to the Serverless stack with schedules disabled.
+   to the Serverless stack. Its schedules stay disabled, because
+   `serverlessRunsSchedules` is still `true`.
 2. **Smoke test.**
    - `curl -i "$(npm run -s tf -- prod output -raw api_gateway_url)/api/dashboard"`
      should return 401. This only proves routing works.
@@ -147,27 +158,30 @@ moving traffic and scheduled jobs from one stack to the other.
    - If you set a custom domain, create its CNAME (the `api_custom_domain_target`
      output) and wait for DNS before using `api_url`. Until then, use `api_gateway_url`.
 4. **Move the scheduled jobs.**
-   - **Pick a safe day.** Check when the Serverless debt job last ran:
-     `aws logs tail /aws/lambda/money-tracker-api-prod-processDebtPayments --since 5d`.
-     Don't switch on a (UTC) day it has already run. The Terraform rule's 4-day
-     cycle starts when it's enabled, so the days on which debts are processed
-     will shift.
-   - **Stop Serverless's schedules.** Add `SLS_SCHEDULES_ENABLED=false` to
-     `manager/.env.prod` (or `.env`) and run `npm run deploy:prod`. CloudFormation
-     sets the four rules to DISABLED.
-   - **Check they're off:**
-     `aws events list-rules --name-prefix money-tracker-api-prod- --query 'Rules[].[Name,State]' --output table`
-   - **Start Terraform's schedules.** Set `enable_schedules = true` in
-     `env/prod.tfvars`, run `npm run deploy:tf:prod`, and commit the tfvars change.
-   - **Check they're on:** run the same `list-rules` command with
-     `--name-prefix finance-watch-prod-`.
-   - Leave `SLS_SCHEDULES_ENABLED=false` in place, so any later Serverless deploy
-     keeps its schedules off.
+   - **Pick a safe day.** Check whether the Serverless debt job already ran today
+     (UTC); the logs keep about a day:
+     `aws logs tail /aws/lambda/money-tracker-api-prod-processDebtPayments --since 24h`.
+     If it did, wait until tomorrow. The Terraform rule runs on its own 4-day
+     cycle, so the days on which debts are processed will shift.
+   - **Flip the switch.** Add this under `params:` in `serverless.yml` and commit it:
+
+     ```yaml
+     prod:
+       serverlessRunsSchedules: false
+     ```
+
+   - **Turn Serverless off first:** run `npm run deploy:prod`. CloudFormation sets
+     its four rules to DISABLED. Check with
+     `aws events list-rules --name-prefix money-tracker-api-prod- --query 'Rules[].[Name,State]' --output table`.
+   - **Then turn Terraform on:** run `npm run deploy:tf:prod`. Its rules become
+     ENABLED; `npm run tf -- prod output schedules_enabled` prints `true`. Check
+     with the same `list-rules` command and `--name-prefix finance-watch-prod-`.
 5. **Observability.** Function names, log groups and the `faas.name` telemetry
    attribute change from `money-tracker-api-prod-*` to `finance-watch-prod-*`.
    Update any Grafana dashboards or alerts that filter on them.
 6. **Optional:** after a stable period, run `npx serverless remove --stage prod`.
-   The fallback then means a fresh `npm run deploy:prod`, which still works.
+   The fallback then means a fresh `npm run deploy:prod`, which still works and
+   keeps its schedules off until you flip the switch back.
 
 **Optional custom domain.** Set `api_domain_name` and `api_certificate_arn` in
 `env/prod.tfvars` (the ACM certificate must be in ap-south-1). Once the client
@@ -178,28 +192,27 @@ public URL.
 
 `npm run deploy:prod` still works. Do the switchover steps in reverse.
 
-1. **Stop the Terraform schedules first.**
-   - If Terraform works: set `enable_schedules = false` in `env/prod.tfvars` and
-     run `npm run deploy:tf:prod`.
-   - If Terraform itself is broken: use the AWS CLI.
+1. **Flip the switch back.** Set `params.prod.serverlessRunsSchedules: true` in
+   `serverless.yml` (or delete the `prod:` block) and commit it.
+2. **Turn Terraform's schedules off first.**
+   - If Terraform works: run `npm run deploy:tf:prod`. Its rules become DISABLED.
+   - If Terraform itself is broken: disable the rules with the AWS CLI.
 
      ```bash
-     for r in $(aws events list-rules --name-prefix finance-watch-prod- --query 'Rules[].Name' --output text); do
-       aws events disable-rule --name "$r"
+     for fn in weeklyExpenseSummary dailyTelegramDigest dailyExpenseReminder processDebtPayments; do
+       aws events disable-rule --name "finance-watch-prod-$fn-0"
      done
      ```
 
-     **Also** set `enable_schedules = false` in `env/prod.tfvars` and commit it.
-     Otherwise the next Terraform apply turns the rules back on.
-2. **Turn Serverless's schedules back on.** Remove `SLS_SCHEDULES_ENABLED=false`
-   (or set it to `true`) and run `npm run deploy:prod`. Because the setting is
-   part of the template, CloudFormation re-enables the rules. Check with
+     Because of step 1, a later Terraform apply keeps them disabled.
+3. **Then turn Serverless's schedules on:** run `npm run deploy:prod`. The
+   setting is part of the template, so CloudFormation re-enables the rules. Check with
    `aws events list-rules --name-prefix money-tracker-api-prod- --query 'Rules[].[Name,State]' --output table`.
-3. **Move traffic back.** Point `VITE_API_URL` and the Telegram webhook at the
+4. **Move traffic back.** Point `VITE_API_URL` and the Telegram webhook at the
    Serverless API URL, shown by `npx serverless info --stage prod`.
 
-Avoid enabling or disabling rules in the AWS console without also changing
-these settings. A later deploy of either stack would silently undo it.
+Avoid enabling or disabling rules in the AWS console except in that emergency
+case. Any later deploy of either stack resets them to what `serverless.yml` says.
 
 ## Notes
 

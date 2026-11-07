@@ -51,6 +51,7 @@ locals {
       for ev in fn.events : {
         key = try(
           "${ev.httpApi.method == "*" ? "ANY" : upper(ev.httpApi.method)} ${ev.httpApi.path}",
+          format("%s %s", upper(regex("^(\\S+) (.+)$", ev.httpApi)[0]), regex("^(\\S+) (.+)$", ev.httpApi)[1]),
           tostring(ev.httpApi),
         )
         function = name
@@ -68,6 +69,17 @@ locals {
   # Functions that are reachable through the HTTP API.
   http_functions = toset(values(local.http_routes))
 
+  # params.<stage>.serverlessRunsSchedules (falling back to params.default, like
+  # Serverless) decides which stack runs the scheduled jobs; Terraform runs them
+  # only when Serverless does not. Missing/invalid values keep Terraform's off.
+  serverless_params = try(local.serverless.params, {})
+  serverless_runs_schedules = try(
+    tobool(local.serverless_params[var.stage].serverlessRunsSchedules),
+    tobool(local.serverless_params.default.serverlessRunsSchedules),
+    true,
+  )
+  terraform_runs_schedules = !local.serverless_runs_schedules
+
   # "<functionName>-<eventIndex>" => schedule definition
   schedules = merge([
     for name, fn in local.functions : {
@@ -77,8 +89,8 @@ locals {
         expression  = try(tostring(ev.schedule.rate), tostring(ev.schedule), "unsupported")
         description = try(ev.schedule.description, null)
         # A literal `enabled: false` in serverless.yml disables the job in both
-        # stacks. A `${...}` expression (such as SLS_SCHEDULES_ENABLED) only
-        # controls the Serverless stack; here var.enable_schedules decides.
+        # stacks. The `${strToBool(${param:serverlessRunsSchedules})}` expression
+        # is not resolved here; local.terraform_runs_schedules decides instead.
         enabled = try(tobool(ev.schedule.enabled), true)
       }
       if can(ev.schedule)

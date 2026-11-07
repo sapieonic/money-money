@@ -24,17 +24,6 @@ variable "project" {
   default     = "finance-watch"
 }
 
-variable "enable_schedules" {
-  description = <<-EOT
-    Whether the EventBridge schedules (weekly email, daily digest, reminders, debt
-    payments) are ENABLED. Keep this false while the Serverless stack for the same
-    stage is still live: running both would send duplicate emails/Telegram messages
-    and record every scheduled debt payment twice.
-  EOT
-  type        = bool
-  default     = false
-}
-
 variable "api_domain_name" {
   description = "Optional custom domain for the HTTP API, e.g. api.money.manasranjan.dev. Requires api_certificate_arn."
   type        = string
