@@ -76,6 +76,15 @@ resource "aws_s3_bucket_public_access_block" "state" {
   restrict_public_buckets = true
 }
 
+# Disables ACLs explicitly (AWS's default for new buckets, but kept in code so
+# the state bucket's hardening never depends on account or API defaults).
+resource "aws_s3_bucket_ownership_controls" "state" {
+  bucket = aws_s3_bucket.state.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
 data "aws_iam_policy_document" "tls_only" {
   statement {
     sid     = "DenyInsecureTransport"
