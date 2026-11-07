@@ -7,8 +7,9 @@
  *   npm run tf -- prod output api_url
  *
  * What it does on top of plain `terraform`:
- *  - Loads manager/.env.<stage> (or .env), the same files Serverless reads, and
- *    exports each app setting as TF_VAR_<name> so no secrets live in tfvars.
+ *  - Loads manager/.env.<stage> and manager/.env, the same files and precedence
+ *    as Serverless v4, and exports each app setting as TF_VAR_<name>, so no
+ *    secrets live in tfvars.
  *  - Uses a separate working directory per stage (infra/.terraform-<stage>) and
  *    runs `terraform init` against that stage's S3 state the first time.
  *  - Adds -var-file=env/<stage>.tfvars where Terraform accepts it.
@@ -17,8 +18,8 @@
  * Env overrides: TERRAFORM_BIN (binary path), SKIP_BUILD=1, TF_STATE_BUCKET,
  * TF_STATE_REGION (default ap-south-1).
  */
-import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -26,7 +27,8 @@ import dotenv from 'dotenv';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const infraDir = path.join(root, 'infra');
 
-// App settings forwarded to Terraform. Names match .env / serverless.yml.
+// App settings forwarded to Terraform. Names match .env / serverless.yml
+// (infra/guards.tf fails the plan if serverless.yml has one Terraform lacks).
 const APP_ENV_VARS = [
   'MONGODB_URI',
   'MONGODB_DB_NAME',
@@ -51,6 +53,11 @@ const APP_ENV_VARS = [
 
 const VAR_FILE_COMMANDS = new Set(['plan', 'apply', 'destroy', 'import', 'refresh', 'console']);
 const BUILD_COMMANDS = new Set(['plan', 'apply', 'destroy', 'import', 'refresh', 'console']);
+// apply/plan flags that may take their value as the next argument (`-target X`).
+const FLAGS_WITH_VALUE = new Set([
+  '-target', '-replace', '-var', '-var-file', '-parallelism', '-lock-timeout',
+  '-state', '-state-out', '-backup', '-out', '-generate-config-out',
+]);
 
 function fail(message) {
   console.error(`tf: ${message}`);
@@ -67,16 +74,18 @@ if (!/^[a-z0-9-]+$/.test(stage)) {
 }
 
 // --- Environment -----------------------------------------------------------
-// Same lookup as Serverless v4: .env.<stage> if present, otherwise .env.
-// Values already set in the shell win over the file.
-const stageEnvFile = path.join(root, `.env.${stage}`);
-const envFile = existsSync(stageEnvFile) ? stageEnvFile : path.join(root, '.env');
-if (existsSync(envFile)) {
-  dotenv.config({ path: envFile, quiet: true });
-  console.error(`tf: loaded ${path.relative(root, envFile)}`);
+// Same precedence as Serverless v4: shell environment, then .env.<stage>,
+// then .env (dotenv never overrides a value that is already set).
+for (const file of [`.env.${stage}`, '.env']) {
+  const fullPath = path.join(root, file);
+  if (existsSync(fullPath)) {
+    dotenv.config({ path: fullPath, quiet: true });
+    console.error(`tf: loaded ${file}`);
+  }
 }
 
-const env = { ...process.env, TF_VAR_stage: stage, TF_DATA_DIR: path.join(infraDir, `.terraform-${stage}`) };
+const dataDir = path.join(infraDir, `.terraform-${stage}`);
+const env = { ...process.env, TF_VAR_stage: stage, TF_DATA_DIR: dataDir };
 for (const name of APP_ENV_VARS) {
   if (process.env[name] !== undefined) {
     env[`TF_VAR_${name.toLowerCase()}`] = process.env[name];
@@ -85,15 +94,29 @@ for (const name of APP_ENV_VARS) {
 
 const terraformBin = process.env.TERRAFORM_BIN || 'terraform';
 
+// Runs terraform and resolves with its exit code. While it runs, Ctrl-C is left
+// to Terraform (it receives SIGINT from the terminal and shuts down gracefully,
+// releasing the state lock) instead of killing this wrapper underneath it.
 function terraform(args) {
-  const result = spawnSync(terraformBin, [`-chdir=${infraDir}`, ...args], { stdio: 'inherit', env });
-  if (result.error) {
-    if (result.error.code === 'ENOENT') {
-      fail(`"${terraformBin}" not found. Install Terraform >= 1.10 or set TERRAFORM_BIN.`);
-    }
-    throw result.error;
-  }
-  return result.status ?? 1;
+  return new Promise((resolve) => {
+    const child = spawn(terraformBin, [`-chdir=${infraDir}`, ...args], { stdio: 'inherit', env });
+    const ignore = () => {};
+    process.on('SIGINT', ignore);
+    process.on('SIGTERM', ignore);
+    const done = (code) => {
+      process.off('SIGINT', ignore);
+      process.off('SIGTERM', ignore);
+      resolve(code);
+    };
+    child.on('error', (error) => {
+      if (error.code === 'ENOENT') {
+        fail(`"${terraformBin}" not found. Install Terraform >= 1.11 or set TERRAFORM_BIN.`);
+      }
+      console.error(error);
+      done(1);
+    });
+    child.on('exit', (code, signal) => done(code ?? (signal ? 1 : 0)));
+  });
 }
 
 // --- Backend / init --------------------------------------------------------
@@ -118,19 +141,53 @@ function backendArgs() {
   ];
 }
 
-if (command === 'init') {
-  process.exit(terraform(['init', ...backendArgs(), ...rest]));
+// Remembers which backend settings this stage was initialised with, so a later
+// change (new TF_STATE_BUCKET, new backends/<stage>.s3.tfbackend) is caught
+// instead of silently using the old state location.
+const backendMarker = path.join(dataDir, 'backend-args.json');
+
+function backendFingerprint(args) {
+  const fileArg = args.find((a) => a.endsWith('.s3.tfbackend'));
+  const fileContent = fileArg ? readFileSync(path.join(infraDir, fileArg.split('=')[1]), 'utf8') : null;
+  return JSON.stringify({ args, fileContent });
 }
 
-if (!existsSync(path.join(env.TF_DATA_DIR, 'terraform.tfstate'))) {
+async function init(args, extra) {
+  const status = await terraform(['init', ...args, ...extra]);
+  if (status === 0) writeFileSync(backendMarker, backendFingerprint(args));
+  return status;
+}
+
+if (command === 'init') {
+  process.exit(await init(backendArgs(), rest));
+}
+
+const currentBackend = backendArgs();
+if (!existsSync(path.join(dataDir, 'terraform.tfstate'))) {
   console.error(`tf: initializing ${stage} working directory`);
-  const status = terraform(['init', '-input=false', ...backendArgs()]);
+  const status = await init(currentBackend, ['-input=false']);
   if (status !== 0) process.exit(status);
+} else if (existsSync(backendMarker) && readFileSync(backendMarker, 'utf8') !== backendFingerprint(currentBackend)) {
+  fail(
+    `the state backend settings for "${stage}" changed since it was initialised.\n` +
+      `    Run: npm run tf -- ${stage} init -migrate-state   (copy existing state to the new location)\n` +
+      `     or: npm run tf -- ${stage} init -reconfigure     (use the new location as-is)`
+  );
 }
 
 // --- Command ---------------------------------------------------------------
-// `apply <planfile>` must not get -var-file and needs no rebuild.
-const appliesSavedPlan = command === 'apply' && rest.some((arg) => !arg.startsWith('-'));
+// `apply <planfile>`: the last argument is an existing file and not the value
+// of a flag such as `-target X`. Saved plans must not get -var-file and need
+// no rebuild (they upload the zips created when the plan was made).
+function savedPlanArg() {
+  if (command !== 'apply' || rest.length === 0) return null;
+  const last = rest[rest.length - 1];
+  const previous = rest[rest.length - 2];
+  if (last.startsWith('-') || (previous && FLAGS_WITH_VALUE.has(previous))) return null;
+  const candidate = path.resolve(infraDir, last);
+  return existsSync(candidate) && statSync(candidate).isFile() ? last : null;
+}
+const appliesSavedPlan = savedPlanArg() !== null;
 
 if (BUILD_COMMANDS.has(command) && !appliesSavedPlan && process.env.SKIP_BUILD !== '1') {
   const build = spawnSync(process.execPath, [path.join(root, 'scripts', 'build-lambdas.mjs')], { stdio: 'inherit' });
@@ -144,4 +201,4 @@ if (VAR_FILE_COMMANDS.has(command) && !appliesSavedPlan && existsSync(varFile)) 
 }
 args.push(...rest);
 
-process.exit(terraform(args));
+process.exit(await terraform(args));

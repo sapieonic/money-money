@@ -3,9 +3,10 @@
 # schedules, runtime, memory/timeout, log retention and CORS. Terraform reads
 # it directly, so adding a function there deploys it through both paths.
 #
-# Only plain YAML is read from the sections below; `${...}` Serverless
-# variables (used in provider.environment) are NOT resolved here — the Lambda
-# environment is defined explicitly in local.environment instead.
+# Only plain YAML is read from these sections; `${...}` Serverless variables
+# are NOT resolved here. The Lambda environment is therefore defined
+# explicitly in local.environment, and guards.tf fails the plan if
+# serverless.yml uses a setting this config does not translate.
 # ---------------------------------------------------------------------------
 
 locals {
@@ -18,10 +19,13 @@ locals {
   default_memory     = try(local.sls_provider.memorySize, 256)
   default_timeout    = try(local.sls_provider.timeout, 20)
   log_retention_days = try(local.sls_provider.logRetentionInDays, 14)
-  cors               = local.sls_provider.httpApi.cors
+  cors               = try(local.sls_provider.httpApi.cors, {})
 
-  # Where scripts/build-lambdas.mjs writes bundles (relative to this directory).
-  build_dir = "${path.module}/../dist/lambda"
+  # scripts/build-lambdas.mjs writes one bundle per handler module here.
+  # Zips are per stage, so building/planning another stage never swaps the
+  # files a saved plan for this stage will upload.
+  bundle_dir = "${path.module}/../dist/lambda/bundles"
+  zip_dir    = "${path.module}/../dist/lambda/zip/${var.stage}"
 
   # functionName => normalized definition
   functions = {
@@ -30,6 +34,7 @@ locals {
       handler_dir = dirname(fn.handler)
       module      = split(".", basename(fn.handler))[0]
       export      = split(".", basename(fn.handler))[1]
+      description = try(fn.description, null)
       memory      = try(fn.memorySize, local.default_memory)
       timeout     = try(fn.timeout, local.default_timeout)
       events      = try(fn.events, [])
@@ -39,18 +44,26 @@ locals {
   # Handler modules that need a bundle/zip.
   modules = toset([for fn in local.functions : fn.module])
 
-  # "GET /api/income" => function name
-  http_routes = merge([
-    for name, fn in local.functions : {
-      for ev in fn.events :
-      # Supports both `httpApi: { method, path }` and the `httpApi: 'GET /path'` shorthand.
-      try(
-        "${ev.httpApi.method == "*" ? "ANY" : upper(ev.httpApi.method)} ${ev.httpApi.path}",
-        tostring(ev.httpApi),
-      ) => name
+  # Every httpApi event as { key = "GET /api/income", function = "getIncomes" }.
+  # Supports `httpApi: { method, path }` and the `httpApi: 'GET /path'` shorthand.
+  http_route_list = flatten([
+    for name, fn in local.functions : [
+      for ev in fn.events : {
+        key = try(
+          "${ev.httpApi.method == "*" ? "ANY" : upper(ev.httpApi.method)} ${ev.httpApi.path}",
+          tostring(ev.httpApi),
+        )
+        function = name
+      }
       if can(ev.httpApi)
-    }
-  ]...)
+    ]
+  ])
+
+  # route key => [functions]; more than one entry is a duplicate (guards.tf).
+  http_route_owners = { for r in local.http_route_list : r.key => r.function... }
+
+  # "GET /api/income" => function name
+  http_routes = { for key, owners in local.http_route_owners : key => owners[0] }
 
   # Functions that are reachable through the HTTP API.
   http_functions = toset(values(local.http_routes))
@@ -59,24 +72,20 @@ locals {
   schedules = merge([
     for name, fn in local.functions : {
       for idx, ev in fn.events : "${name}-${idx}" => {
-        function    = name
-        expression  = try(ev.schedule.rate, ev.schedule)
+        function = name
+        # Unsupported shapes (e.g. a list of rates) are reported by guards.tf.
+        expression  = try(tostring(ev.schedule.rate), tostring(ev.schedule), "unsupported")
         description = try(ev.schedule.description, null)
-        # A schedule explicitly disabled in serverless.yml stays disabled here too.
+        # A literal `enabled: false` in serverless.yml disables the job in both
+        # stacks. A `${...}` expression (such as SLS_SCHEDULES_ENABLED) only
+        # controls the Serverless stack; here var.enable_schedules decides.
         enabled = try(tobool(ev.schedule.enabled), true)
       }
       if can(ev.schedule)
     }
   ]...)
 
-  unsupported_events = flatten([
-    for name, fn in local.functions : [
-      for ev in fn.events : "${name}: ${join(",", keys(ev))}"
-      if !can(ev.httpApi) && !can(ev.schedule)
-    ]
-  ])
-
-  # Mirrors provider.environment in serverless.yml.
+  # Mirrors provider.environment in serverless.yml (guards.tf checks the keys match).
   environment = {
     MONGODB_URI                 = var.mongodb_uri
     MONGODB_DB_NAME             = var.mongodb_db_name
@@ -100,12 +109,5 @@ locals {
     OTEL_EXPORTER_OTLP_HEADERS  = var.grafana_otlp_headers
     # src/utils/telemetry.ts parses this with split('=')[1]; keep it a single attribute.
     OTEL_RESOURCE_ATTRIBUTES = "deployment.environment=${var.stage}"
-  }
-}
-
-check "serverless_events_supported" {
-  assert {
-    condition     = length(local.unsupported_events) == 0
-    error_message = "serverless.yml has event types Terraform does not deploy (only httpApi and schedule are supported): ${join("; ", local.unsupported_events)}"
   }
 }

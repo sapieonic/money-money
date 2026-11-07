@@ -16,7 +16,7 @@ data "aws_iam_policy_document" "lambda_assume" {
 }
 
 resource "aws_iam_role" "lambda" {
-  name               = "${local.name_prefix}-lambda"
+  name               = "${local.name_prefix}-${var.region}-lambda"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
 }
 
@@ -43,8 +43,8 @@ data "archive_file" "bundle" {
   for_each = local.modules
 
   type             = "zip"
-  source_file      = "${local.build_dir}/${each.key}.js"
-  output_path      = "${local.build_dir}/zip/${each.key}.zip"
+  source_file      = "${local.bundle_dir}/${each.key}.js"
+  output_path      = "${local.zip_dir}/${each.key}.zip"
   output_file_mode = "0644"
 }
 
@@ -66,6 +66,7 @@ resource "aws_lambda_function" "fn" {
   role          = aws_iam_role.lambda.arn
   runtime       = local.runtime
   handler       = "${each.value.module}.${each.value.export}"
+  description   = each.value.description
   memory_size   = each.value.memory
   timeout       = each.value.timeout
 

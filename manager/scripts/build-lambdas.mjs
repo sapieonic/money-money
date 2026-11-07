@@ -2,9 +2,9 @@
 /**
  * Bundles every Lambda handler module in src/handlers/ for the Terraform deployment.
  *
- * Output: dist/lambda/<module>.js (one self-contained CommonJS bundle per handler file).
- * Terraform zips each bundle and points every function defined in that file at it,
- * using the handler string "<module>.<export>".
+ * Output: dist/lambda/bundles/<module>.js (one self-contained CommonJS bundle per
+ * handler file). Terraform zips each bundle into dist/lambda/zip/<stage>/ and points
+ * every function defined in that file at it, using the handler string "<module>.<export>".
  *
  * esbuild options mirror the `build.esbuild` block in serverless.yml so both
  * deployment paths ship the same code.
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const handlersDir = path.join(root, 'src', 'handlers');
-const outDir = path.join(root, 'dist', 'lambda');
+const outDir = path.join(root, 'dist', 'lambda', 'bundles');
 
 const entries = (await readdir(handlersDir))
   .filter((f) => f.endsWith('.ts') && !f.endsWith('.d.ts'))
@@ -28,6 +28,8 @@ if (entries.length === 0) {
 }
 
 // Start from a clean directory so removed handlers don't linger in deployments.
+// Only bundles are wiped: per-stage zips (dist/lambda/zip/<stage>) referenced by a
+// saved plan for another stage must stay untouched.
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 

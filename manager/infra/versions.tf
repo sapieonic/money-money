@@ -1,6 +1,6 @@
 terraform {
-  # 1.10+ is required for S3-native state locking (`use_lockfile`).
-  required_version = ">= 1.10"
+  # 1.11+: S3-native state locking (`use_lockfile`) is GA from 1.11.
+  required_version = ">= 1.11"
 
   required_providers {
     aws = {

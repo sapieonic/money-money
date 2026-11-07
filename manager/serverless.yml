@@ -401,13 +401,15 @@ functions:
           method: delete
 
   # Scheduled Jobs
+  # SLS_SCHEDULES_ENABLED=false turns these off in the Serverless stack once the
+  # Terraform stack owns the schedules (see infra/README.md). Defaults to on.
   weeklyExpenseSummary:
     handler: src/handlers/scheduledJobs.sendWeeklyExpenseSummaries
     timeout: 120
     events:
       - schedule:
           rate: cron(30 3 ? * MON *)  # Every Monday at 9:00 AM IST (3:30 UTC)
-          enabled: true
+          enabled: ${strToBool(${env:SLS_SCHEDULES_ENABLED, 'true'})}
           description: Send weekly expense summary emails
 
   dailyTelegramDigest:
@@ -416,7 +418,7 @@ functions:
     events:
       - schedule:
           rate: cron(0 16 * * ? *)  # Every day at 9:30 PM IST (16:00 UTC)
-          enabled: true
+          enabled: ${strToBool(${env:SLS_SCHEDULES_ENABLED, 'true'})}
           description: Send daily AI expense digest via Telegram
 
   dailyExpenseReminder:
@@ -425,7 +427,7 @@ functions:
     events:
       - schedule:
           rate: cron(15 13 * * ? *)  # Every day at 6:45 PM IST (13:15 UTC)
-          enabled: true
+          enabled: ${strToBool(${env:SLS_SCHEDULES_ENABLED, 'true'})}
           description: Send daily expense reminders via Telegram
 
   processDebtPayments:
@@ -434,5 +436,5 @@ functions:
     events:
       - schedule:
           rate: rate(4 days)
-          enabled: true
+          enabled: ${strToBool(${env:SLS_SCHEDULES_ENABLED, 'true'})}
           description: Process scheduled debt payments every 4 days
