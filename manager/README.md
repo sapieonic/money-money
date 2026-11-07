@@ -8,7 +8,7 @@ Serverless backend API for the Money Tracker application, built with AWS Lambda 
 - **API Gateway** (HTTP API) for REST endpoints
 - **MongoDB Atlas** for database
 - **Firebase Admin** for authentication token verification
-- **Serverless Framework** for deployment
+- **Terraform** for deployment (Serverless Framework kept as a fallback and for local dev)
 - **TypeScript** for type safety
 - **Mongoose** for MongoDB ODM
 - **Grafana Cloud** for observability (traces & logs via OTLP)
@@ -70,14 +70,20 @@ The API will be available at `http://localhost:3000`
 
 ## Deployment
 
-Deploy to AWS:
+Deployments use Terraform (`infra/`). Function, route and schedule definitions
+are read from `serverless.yml`, so it stays the single place to add endpoints.
+See [`infra/README.md`](infra/README.md) for one-time setup, switching prod over
+from Serverless, and falling back.
 
 ```bash
-# Deploy to dev stage
-npm run deploy
+# Terraform (primary)
+npm run tf:plan:prod      # preview prod changes
+npm run deploy:tf:prod    # deploy prod
+npm run deploy:tf         # deploy dev
 
-# Deploy to production
-npm run deploy:prod
+# Serverless (fallback)
+npm run deploy            # dev stage
+npm run deploy:prod       # prod stage
 ```
 
 ## Project Structure
@@ -357,8 +363,13 @@ This sends a friendly message encouraging users to set due dates for better expe
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Start local development server |
-| `npm run deploy` | Deploy to AWS (dev stage) |
-| `npm run deploy:prod` | Deploy to AWS (prod stage) |
+| `npm run deploy:tf` | Deploy to AWS with Terraform (dev stage) |
+| `npm run deploy:tf:prod` | Deploy to AWS with Terraform (prod stage) |
+| `npm run tf:plan` / `tf:plan:prod` | Preview Terraform changes |
+| `npm run tf -- <stage> <args>` | Run any Terraform command for a stage |
+| `npm run build:lambda` | Bundle handlers into `dist/lambda/` (run automatically by the `tf` scripts) |
+| `npm run deploy` | Deploy with Serverless (dev stage, fallback) |
+| `npm run deploy:prod` | Deploy with Serverless (prod stage, fallback) |
 | `npm run logs` | View CloudWatch logs |
 
 ## Error Handling

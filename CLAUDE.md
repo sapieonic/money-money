@@ -12,8 +12,12 @@ Finance Watch — a personal finance app with React 19 frontend (`client/`) and 
 ```bash
 npm install              # install deps
 npm run dev              # local dev via serverless-offline (http://localhost:3000)
-npm run deploy:prod      # deploy to AWS Lambda (ap-south-1)
-serverless logs -f <functionName>  # view Lambda logs
+npm run tf:plan:prod     # Terraform plan for prod (builds bundles first)
+npm run deploy:tf:prod   # deploy to AWS via Terraform (primary path, ap-south-1)
+npm run tf -- <stage> <terraform args>  # any Terraform command, e.g. `npm run tf -- prod output`
+npm run deploy:prod      # deploy via Serverless (fallback path)
+aws logs tail /aws/lambda/finance-watch-prod-<functionName> --follow  # logs (Terraform stack)
+serverless logs -f <functionName>  # logs (Serverless stack)
 ```
 
 ### Frontend (`client/`)
@@ -71,9 +75,19 @@ Defined in `serverless.yml`. All scheduled handlers are in `handlers/scheduledJo
 
 ## Environment Variables
 
-Backend requires `MONGODB_URI`, `MONGODB_DB_NAME`, `FIREBASE_PROJECT_ID` at minimum. Optional integrations (Telegram, Azure OpenAI, Databricks Claude, Mailjet, Grafana OTLP) are enabled by their respective env vars. All env vars must also be configured in `serverless.yml` for deployment.
+Backend requires `MONGODB_URI`, `MONGODB_DB_NAME`, `FIREBASE_PROJECT_ID` at minimum. Optional integrations (Telegram, Azure OpenAI, Databricks Claude, Mailjet, Grafana OTLP) are enabled by their respective env vars. All env vars must also be configured in `serverless.yml` and the Terraform config for deployment (see "Deployment" below).
 
 Frontend uses `VITE_` prefix. Requires `VITE_API_URL` and Firebase config vars.
+
+## Deployment (Terraform + Serverless)
+
+Two deployment paths exist: Terraform (`manager/infra/`, primary) and Serverless (fallback). See `manager/infra/README.md`.
+- `serverless.yml` stays the source of truth for functions, routes, schedules, runtime, memory/timeout, log retention and CORS. Terraform reads it via `yamldecode`, so add endpoints there only and both paths pick them up. Terraform supports only `httpApi` and `schedule` events.
+- `scripts/build-lambdas.mjs` bundles each `src/handlers/*.ts` with esbuild; handlers must live in `src/handlers/`.
+- `scripts/tf.mjs` loads `.env(.<stage>)` into `TF_VAR_*`, inits per-stage S3 state (`TF_STATE_BUCKET`), and adds `infra/env/<stage>.tfvars`.
+- A new Lambda env var must be added in four places: `serverless.yml`, `infra/variables.tf`, `infra/locals.tf` (`environment`), and `APP_ENV_VARS` in `scripts/tf.mjs`.
+- Terraform resources are named `finance-watch-<stage>-*` (Serverless: `money-tracker-api-<stage>-*`) so both stacks can coexist.
+- `enable_schedules` (tfvars) must be true in at most one stack at a time — `processDebtPayments` is not idempotent.
 
 ## Serverless Config
 

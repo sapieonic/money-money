@@ -7,6 +7,12 @@
     "deploy": "serverless deploy",
     "deploy:prod": "serverless deploy --stage prod",
     "logs": "serverless logs -f",
+    "build:lambda": "node scripts/build-lambdas.mjs",
+    "tf": "node scripts/tf.mjs",
+    "tf:plan": "node scripts/tf.mjs dev plan",
+    "tf:plan:prod": "node scripts/tf.mjs prod plan",
+    "deploy:tf": "node scripts/tf.mjs dev apply",
+    "deploy:tf:prod": "node scripts/tf.mjs prod apply",
     "test": "echo \"Error: no test specified\" && exit 1",
     "migrate:email-prefs": "ts-node scripts/migrate-email-preferences.ts"
   },
